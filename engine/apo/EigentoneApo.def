@@ -1,0 +1,4 @@
+LIBRARY EigentoneApo
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE

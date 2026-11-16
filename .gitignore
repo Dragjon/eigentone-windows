@@ -1,0 +1,11 @@
+build/
+out/
+.vs/
+*.user
+
+# The app, once it arrives
+.gradle/
+app/build/
+*.iml
+.idea/
+local.properties
