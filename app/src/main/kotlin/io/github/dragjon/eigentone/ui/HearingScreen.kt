@@ -161,7 +161,8 @@ private fun Intro(onStart: () -> Unit) {
         style = MaterialTheme.typography.bodySmall,
         color = Palette.TextDim,
     )
-    Button(onClick = onStart, modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp)) { Text(stringResource(Res.string.ui_start)) }
+    // On Windows something before Eigentone can change a quiet tone's level, so that's checked first.
+    LevelCheckedStart(onStart)
 }
 
 @Composable

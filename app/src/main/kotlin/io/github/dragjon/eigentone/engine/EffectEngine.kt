@@ -46,6 +46,9 @@ class EffectEngine(private val client: ServiceClient) {
         val params = paramsFor(state)
         if (!force && params == lastSent) return
         if (client.send(buildJsonObject { put("op", "apply"); put("params", params) })) lastSent = params
+        if (System.getenv("EIGENTONE_SELFTEST") != null) {
+            io.github.dragjon.eigentone.platform.Log.i("SelfTest", "apply enabled=${params["enabled"]} input=${params["inputGainDb"]} limiter=${params["limiter"]}")
+        }
     }
 
     fun paramsFor(state: AppState): JsonObject {

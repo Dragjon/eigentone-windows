@@ -128,6 +128,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.layout.layout
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -564,7 +565,10 @@ private fun StudioTopBar(state: AppState, status: EngineStatus, module: Tab, goT
         Text(io.github.dragjon.eigentone.data.CrashLog.VERSION, style = Readout, color = Palette.TextDim, modifier = Modifier.padding(start = 6.dp, end = 28.dp))
         val savedVersion = Repo.allPresets(state).firstOrNull { it.id == state.current.id }
         val deviceSaved by Repo.deviceSaved.collectAsStateWithLifecycle()
-        Row(Modifier.padding(start = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Hidden while a comparison switches between sounds: it would show on one side only and give a blind
+        // comparison away.
+        val comparing by Repo.comparing.collectAsStateWithLifecycle()
+        if (!comparing) Row(Modifier.padding(start = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             // In one place in every module, where there's room for it, rather than crowding the canvas toolbar.
             if (savedVersion != null && savedVersion != state.current) UnsavedBar(state, savedVersion, inline = true)
             deviceSaved?.let { DeviceUnsavedBar(state, it, inline = true) }
@@ -4088,7 +4092,10 @@ private object History {
     @Composable
     fun Recorder(@Suppress("UNUSED_PARAMETER") state: AppState) {
         LaunchedEffect(Unit) {
-            Repo.state.mapCurrent().distinctUntilChanged().debounce(SETTLE_MS).collect { current -> record(current) }
+            // Not while a comparison switches between sounds, which isn't editing; what it leaves behind is logged.
+            kotlinx.coroutines.flow.combine(Repo.state.mapCurrent(), Repo.comparing) { current, comparing -> current.takeUnless { comparing } }
+                .filterNotNull()
+                .distinctUntilChanged().debounce(SETTLE_MS).collect { current -> record(current) }
         }
     }
 

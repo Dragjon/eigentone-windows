@@ -163,19 +163,19 @@
     <string name="help_start_on_boot_title" formatted="false">Start automatically</string>
     <string name="help_status_apps_body" formatted="false">The players Eigentone is processing in Per app mode.</string>
     <string name="help_status_apps_title" formatted="false">Attached apps</string>
-    <string name="help_status_bands_body" formatted="false">How finely your curve is reproduced. More is more accurate, and 128 is the most Eigentone asks for.</string>
+    <string name="help_status_bands_body" formatted="false">How finely your curve is reproduced. Eigentone's plug-in builds one smooth filter for each ear from 256 bands. None means the plug-in isn't running on the output playing now.</string>
     <string name="help_status_bands_title" formatted="false">EQ bands</string>
-    <string name="help_status_control_body" formatted="false">Whether Eigentone controls the effect. If another audio app takes over, Eigentone's settings may stop applying.</string>
+    <string name="help_status_control_body" formatted="false">Whether Eigentone's plug-in is in the playing output's effects. A sound driver update can replace them, and then Eigentone's settings stop applying until it's added back.</string>
     <string name="help_status_control_title" formatted="false">In control</string>
-    <string name="help_status_mode_body" formatted="false">Which audio route is in use. Global applies to all apps it can reach, and Per app applies to individual players.</string>
+    <string name="help_status_mode_body" formatted="false">How Eigentone reaches the sound. On Windows its plug-in runs inside Windows' audio engine, for every app playing to the output.</string>
     <string name="help_status_mode_title" formatted="false">Mode</string>
     <string name="help_status_output_body" formatted="false">Where Eigentone thinks audio is going. This decides which preset loads.</string>
     <string name="help_status_output_title" formatted="false">Output</string>
-    <string name="help_status_readback_body" formatted="false">Eigentone reads its settings back from Android to confirm they were applied. All bands should match, such as 128/128.</string>
+    <string name="help_status_readback_body" formatted="false">Whether the plug-in has taken your latest settings, as 256/256 once it has. It takes them as sound plays, so before anything has played it says Not checked yet.</string>
     <string name="help_status_readback_title" formatted="false">Bands accepted</string>
     <string name="help_status_repairs_body" formatted="false">How many times Eigentone has rebuilt the effect after losing it since it last started, such as when the Windows audio service restarts. Occasional repairs are fine, but a rising number suggests a problem.</string>
     <string name="help_status_repairs_title" formatted="false">Repairs</string>
-    <string name="help_status_running_body" formatted="false">Whether the audio effect is currently loaded.</string>
+    <string name="help_status_running_body" formatted="false">Whether Eigentone's background service is running, which passes your settings to the plug-in.</string>
     <string name="help_status_running_title" formatted="false">Running</string>
     <string name="help_stereo_width_body" formatted="false">Makes the sound feel wider by leaning small frequency ranges left and right in turn, while keeping bass centred. It's subtle by design, with no head tracking or surround channels. Higher values can make vocals feel less centred. This is saved with the preset.</string>
     <string name="help_stereo_width_title" formatted="false">Stereo width</string>
@@ -510,9 +510,9 @@
     <string name="ui_measure_action" formatted="false">Measure with a microphone</string>
     <string name="ui_measure_action_detail" formatted="false">Plays tones, listens, and evens out the sound where you sit</string>
     <string name="ui_measure_title" formatted="false">Measure %1$s</string>
-    <string name="ui_measure_intro" formatted="false">Eigentone plays a set of tones through the speaker for about 15 seconds while the microphone listens, three times, from three spots a little apart around where you sit. Then it works out a gentle correction.\n\nSet the volume to how loud you usually listen, keep the room quiet, and put the microphone where your head would be, facing the speaker. The EQ steps aside while the tones play.</string>
-    <string name="ui_measure_phone_mic" formatted="false">This uses the PC's microphone, which hears some frequencies more than others, mostly the deepest bass and the highest treble. The correction leaves those ends alone and keeps boosts small, so it stays safe. A USB measurement microphone gives a more exact result.</string>
-    <string name="ui_measure_usb_mic" formatted="false">A USB microphone is plugged in, so it's used for the measurement.</string>
+    <string name="ui_measure_intro" formatted="false">Eigentone plays a set of tones through the speaker for about 15 seconds while the microphone listens, three times, from three spots a little apart around where you sit. Then it works out a gentle correction.\n\nSet the volume to how loud you usually listen, keep the room quiet, and put the microphone where your head would be, facing the speaker. The EQ steps aside while the tones play. Turn off any microphone effects, such as noise suppression or Voice Clarity, in Windows' sound settings first.</string>
+    <string name="ui_measure_phone_mic" formatted="false">This uses the microphone set as the default in Windows, such as your laptop's or webcam's, which hears some frequencies more than others, mostly the deepest bass and the highest treble. The correction leaves those ends alone and keeps boosts small, so it stays safe. A USB measurement microphone gives a more exact result.</string>
+    <string name="ui_measure_usb_mic" formatted="false">A USB microphone is connected. Eigentone records from the microphone set as the default in Windows' sound settings, so make sure it's that one.</string>
     <string name="ui_measure_playing" formatted="false">Measuring spot %1$d of %2$d. Keep still and quiet.</string>
     <string name="ui_measure_move" formatted="false">Spot %1$d of %2$d done. Move the microphone about 30 cm, still around where you sit, then measure the next one.</string>
     <string name="ui_measure_next_spot" formatted="false">Measure next spot</string>

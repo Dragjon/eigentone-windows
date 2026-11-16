@@ -27,6 +27,32 @@ class EffectEngineTest {
         assertEquals(2, p["inputGainDb"]!!.jsonArray.size)
     }
 
+    /**
+     * The tools' test tones play through the same output, so Eigentone's plug-in hears them. While a tool runs
+     * the engine is suspended, which must hand over the plain sound, however much the preset does.
+     */
+    @Test
+    fun aSuspendedEngineLetsTheToolsTonesThroughUntouched() {
+        val busy = AppState().let { s ->
+            s.copy(
+                balance = 0.6,
+                limiter = true,
+                current = s.current.copy(
+                    tone = s.current.tone.copy(bassDb = 8.0, surround = 0.8, reverb = ReverbRoom.entries.last(), reverbAmount = 1.0),
+                ),
+            )
+        }
+        val suspended = EffectEngine(ServiceClient()).apply { this.suspended = true }
+        val p = suspended.paramsFor(busy)
+        assertFalse("the plug-in passes the dry sound", p["enabled"]!!.jsonPrimitive.boolean)
+        assertFalse("no surround", p["virtualizer"]!!.jsonObject["enabled"]!!.jsonPrimitive.boolean)
+        assertFalse("no reverb", p["reverb"]!!.jsonObject["enabled"]!!.jsonPrimitive.boolean)
+        val gains = p["inputGainDb"]!!.jsonArray.map { it.jsonPrimitive.double }
+        assertEquals("no balance", gains[0], gains[1], 1e-9)
+        // And the same sound, not suspended, is processed, so the test above means something.
+        assertTrue(engine.paramsFor(busy)["enabled"]!!.jsonPrimitive.boolean)
+    }
+
     @Test
     fun bypassSwitchesTheEngineOffAndDropsBalance() {
         val state = AppState().copy(bypass = true, balance = 0.8)

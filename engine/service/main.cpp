@@ -11,6 +11,7 @@
 //   eigentone-service --console   run in this window, for testing
 #include <windows.h>
 #include <mmdeviceapi.h>
+#include <endpointvolume.h>
 #include <objbase.h>
 #include <sddl.h>
 #include <shlobj.h>
@@ -331,6 +332,98 @@ void watchOutputs() {
 }
 
 // ---------------------------------------------------------------------------------------------------------
+// Volume: where the playing output's volume is, in dB, for quiet listening (Android reads the phone's volume)
+
+/// Raised by Windows on its own threads when the volume or mute changes; the watcher does the reading.
+class VolumeNotifications final : public IAudioEndpointVolumeCallback {
+public:
+    explicit VolumeNotifications(HANDLE changed) : changed_(changed) {}
+    STDMETHODIMP QueryInterface(REFIID riid, void** ppv) override {
+        if (riid == __uuidof(IUnknown) || riid == __uuidof(IAudioEndpointVolumeCallback)) {
+            *ppv = static_cast<IAudioEndpointVolumeCallback*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    STDMETHODIMP_(ULONG) AddRef() override { return ++refs_; }
+    STDMETHODIMP_(ULONG) Release() override { return --refs_; }  // owned by the watcher, which outlives it
+    STDMETHODIMP OnNotify(PAUDIO_VOLUME_NOTIFICATION_DATA) override { return SetEvent(changed_), S_OK; }
+
+private:
+    HANDLE changed_;
+    std::atomic<ULONG> refs_{1};
+};
+
+std::mutex gVolumeMutex;
+json gVolume;  // the last reading, sent to each app as it asks
+
+double tenth(double v) { return std::round(v * 10) / 10; }
+
+/// Follows the default output's volume and tells apps whenever it moves, or the default output changes.
+void watchVolume() {
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    HANDLE changed = CreateEventW(nullptr, FALSE, TRUE, nullptr);
+    VolumeNotifications notifications(changed);
+    IMMDeviceEnumerator* en = nullptr;
+    CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&en));
+    IAudioEndpointVolume* volume = nullptr;
+    std::wstring guid;
+    HANDLE waits[] = {gStopEvent, changed};
+    while (true) {
+        // A change of default output has no volume notification, so it's also checked every second.
+        if (WaitForMultipleObjects(2, waits, FALSE, 1000) == WAIT_OBJECT_0) break;
+        IMMDevice* def = nullptr;
+        std::wstring now;
+        if (en && SUCCEEDED(en->GetDefaultAudioEndpoint(eRender, eConsole, &def))) {
+            LPWSTR id = nullptr;
+            if (SUCCEEDED(def->GetId(&id))) {
+                now = sys::guidOf(id);
+                CoTaskMemFree(id);
+            }
+        }
+        if (now != guid) {
+            if (volume) {
+                volume->UnregisterControlChangeNotify(&notifications);
+                volume->Release();
+                volume = nullptr;
+            }
+            guid = now;
+            if (def && SUCCEEDED(def->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, reinterpret_cast<void**>(&volume)))) {
+                volume->RegisterControlChangeNotify(&notifications);
+            }
+        }
+        if (def) def->Release();
+        if (!volume) continue;
+        float db = 0, minDb = 0, maxDb = 0, step = 0;
+        BOOL muted = FALSE;
+        if (FAILED(volume->GetMasterVolumeLevel(&db)) || FAILED(volume->GetVolumeRange(&minDb, &maxDb, &step))) continue;
+        volume->GetMute(&muted);
+        json reading{{"op", "volume"},
+                     {"output", narrow(guid)},
+                     {"db", tenth(db)},
+                     {"minDb", tenth(minDb)},
+                     {"maxDb", tenth(maxDb)},
+                     {"muted", muted != FALSE}};
+        bool moved;
+        {
+            std::lock_guard lock(gVolumeMutex);
+            moved = reading != gVolume;
+            if (moved) gVolume = reading;
+        }
+        if (moved) broadcast(reading);
+    }
+    if (volume) {
+        volume->UnregisterControlChangeNotify(&notifications);
+        volume->Release();
+    }
+    if (en) en->Release();
+    CloseHandle(changed);
+    CoUninitialize();
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // Meters: level and spectrum of what's playing on the default output
 
 std::wstring defaultGuid() {
@@ -436,6 +529,13 @@ json handle(Client& client, const json& request) {
         reply["seq"] = gSettings.block()->seq;
     } else if (op == "meters") {
         client.wantsMeters = request.value("on", true);
+    } else if (op == "volume") {
+        std::lock_guard lock(gVolumeMutex);
+        if (gVolume.is_object()) {
+            for (const auto& [key, value] : gVolume.items()) {
+                if (key != "op") reply[key] = value;
+            }
+        }
     } else if (op == "hook" || op == "unhook") {
         const std::string guid = request.at("guid").get<std::string>();
         if (!std::regex_match(guid, kGuid)) throw std::invalid_argument("not an output ID");
@@ -482,8 +582,11 @@ void servePipe() {
     ConvertStringSecurityDescriptorToSecurityDescriptorW(kPipeSddl, SDDL_REVISION_1, &sd, nullptr);
     SECURITY_ATTRIBUTES sa{sizeof(sa), sd, FALSE};
     HANDLE connected = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    // EIGENTONE_PIPE serves a test copy on a pipe of its own, beside the installed service.
+    wchar_t custom[128] = {};
+    const std::wstring name = GetEnvironmentVariableW(L"EIGENTONE_PIPE", custom, 128) ? std::wstring(L"\\\\.\\pipe\\") + custom : kPipeName;
     while (!gStopping) {
-        HANDLE pipe = CreateNamedPipeW(kPipeName, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+        HANDLE pipe = CreateNamedPipeW(name.c_str(), PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
                                        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
                                        PIPE_UNLIMITED_INSTANCES, 64 * 1024, 64 * 1024, 0, &sa);
         if (pipe == INVALID_HANDLE_VALUE) {
@@ -532,12 +635,14 @@ void run() {
     }
     std::thread watcher(watchOutputs);
     std::thread meters(sendMeters);
+    std::thread volume(watchVolume);
     std::thread pipe(servePipe);
     log("service: running");
     WaitForSingleObject(gStopEvent, INFINITE);
     gStopping = true;
     pipe.join();
     meters.join();
+    volume.join();
     watcher.join();
     log("service: stopped");
     CoUninitialize();

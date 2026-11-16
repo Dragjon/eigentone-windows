@@ -206,7 +206,9 @@ fun RefineScreen(onSetEnabled: (Boolean) -> Unit, onClose: () -> Unit) {
             }
 
             RefineStep.FINAL -> {
-                val result = remember { refiner.result() }
+                val result = remember {
+                    refiner.result().also { io.github.dragjon.eigentone.platform.Log.i("EigentoneRefine", "Refined change by band: $it") }
+                }
                 // Which side is the refined one is decided once, at random, and never shown.
                 val refinedIsA = remember { Random.nextBoolean() }
                 var side by remember { mutableStateOf(Choice.A) }
@@ -233,6 +235,17 @@ fun RefineScreen(onSetEnabled: (Boolean) -> Unit, onClose: () -> Unit) {
                 Text(stringResource(Res.string.ui_refine_final), style = MaterialTheme.typography.headlineSmall, color = Palette.Text)
                 Text(stringResource(Res.string.ui_refine_final_body), style = MaterialTheme.typography.bodyLarge, color = Palette.TextDim)
                 Text(stringResource(Res.string.ui_refine_listen_tip), style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
+                // How far apart the two are, without saying which is which, so a small difference is expected to
+                // be hard to hear rather than mistaken for the comparison not working.
+                val largest = result.maxOf { kotlin.math.abs(it) }
+                Text(
+                    stringResource(
+                        if (largest <= SUBTLE_DB) Res.string.win_refine_subtle else Res.string.win_refine_apart,
+                        java.lang.String.format(java.util.Locale.US, "%.1f", largest),
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Palette.Text,
+                )
                 NothingPlayingHint()
                 val musicActive = rememberMusicActive()
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -392,3 +405,6 @@ internal fun StopTestDialog(onStop: () -> Unit, onKeepGoing: () -> Unit) {
         dismissButton = { TextButton(onClick = onKeepGoing) { Text(stringResource(Res.string.ui_keep_going)) } },
     )
 }
+
+/** A refinement no larger than this anywhere is said to be subtle. */
+private const val SUBTLE_DB = 1.0

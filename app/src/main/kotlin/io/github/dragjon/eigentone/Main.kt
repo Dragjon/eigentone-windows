@@ -29,6 +29,10 @@ fun main() {
     // drawn with the EQ, isn't needed here.
     if (!Repo.state.value.useSystemSurround) Repo.update { it.copy(useSystemSurround = true) }
     AudioService.start(Context.default)
+    when (System.getenv("EIGENTONE_SELFTEST")) {
+        "tone" -> io.github.dragjon.eigentone.engine.SelfTest.tone()
+        "level" -> io.github.dragjon.eigentone.engine.SelfTest.level()
+    }
 
     application {
         Window(

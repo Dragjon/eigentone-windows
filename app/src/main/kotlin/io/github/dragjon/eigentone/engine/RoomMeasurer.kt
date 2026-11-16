@@ -17,10 +17,17 @@ import javax.sound.sampled.TargetDataLine
  * Windows' default microphone, which is a USB measurement microphone when one is set as the default.
  */
 class RoomMeasurer(@Suppress("UNUSED_PARAMETER") context: Context) {
-    /** The microphone that will be used, by name, or null if there is none. */
+    /**
+     * A USB microphone that's connected, by name, or null if there's none, as on Android, where that's the
+     * microphone used. Java can't tell which microphone is Windows' default, which is the one recorded from,
+     * so the screen says to choose it there.
+     */
     fun microphone(): String? = runCatching {
-        val info = DataLine.Info(TargetDataLine::class.java, Sound.monoFormat())
-        if (AudioSystem.isLineSupported(info)) "Default microphone" else null
+        val wanted = DataLine.Info(TargetDataLine::class.java, Sound.monoFormat())
+        AudioSystem.getMixerInfo()
+            .filter { info -> USB_NAMES.any { info.name.contains(it, ignoreCase = true) } }
+            .firstOrNull { info -> AudioSystem.getMixer(info).isLineSupported(wanted) }
+            ?.name
     }.getOrNull()
 
     /** Plays the sequence once and returns the recording, or null if Windows wouldn't record or play. */
@@ -84,5 +91,8 @@ class RoomMeasurer(@Suppress("UNUSED_PARAMETER") context: Context) {
 
     private companion object {
         const val TAG = "EigentoneMeasure"
+
+        /** How Windows names a USB microphone, or the measurement microphones people use most. */
+        val USB_NAMES = listOf("USB", "UMIK", "miniDSP", "Dayton", "ECM8000", "Behringer")
     }
 }

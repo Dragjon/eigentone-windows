@@ -30,6 +30,8 @@ object Actions {
     }.getOrNull()
 
     fun openUrl(url: String) {
-        runCatching { Desktop.getDesktop().browse(URI(url)) }
+        // Web links go to the browser; Windows' own links, such as ms-settings:sound, go through Explorer.
+        if (url.startsWith("http")) runCatching { Desktop.getDesktop().browse(URI(url)) }
+        else runCatching { ProcessBuilder("explorer.exe", url).start() }
     }
 }

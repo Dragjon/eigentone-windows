@@ -123,6 +123,8 @@ fun RoomMeasureDialog(output: OutputInfo, onDismiss: () -> Unit, onSaved: (Strin
                     Step.Intro -> {
                         Body(stringResource(Res.string.ui_measure_intro))
                         Body(stringResource(if (usb) Res.string.ui_measure_usb_mic else Res.string.ui_measure_phone_mic))
+                        // Checks first that Windows plays tones at the level given, as the hearing check does.
+                        LevelCheckedStart(::start)
                     }
                     is Step.Measuring -> {
                         Body(stringResource(Res.string.ui_measure_playing, s.spot, SPOTS))
@@ -145,7 +147,7 @@ fun RoomMeasureDialog(output: OutputInfo, onDismiss: () -> Unit, onSaved: (Strin
         },
         confirmButton = {
             when (val s = step) {
-                Step.Intro -> TextButton(onClick = ::start) { Text(stringResource(Res.string.ui_start)) }
+                Step.Intro -> Unit
                 is Step.Between -> TextButton(onClick = { measureSpot(s.done + 1) }) { Text(stringResource(Res.string.ui_measure_next_spot)) }
                 is Step.Result -> TextButton(onClick = {
                     val name = appText(Res.string.ui_measure_preset_name, output.label)

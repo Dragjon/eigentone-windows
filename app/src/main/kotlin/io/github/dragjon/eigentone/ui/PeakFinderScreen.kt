@@ -216,7 +216,8 @@ private fun Intro(failed: Boolean, onStart: () -> Unit) {
         color = Palette.TextDim,
     )
     if (failed) Text(stringResource(Res.string.ui_this_phone_wouldn_t_play_the_tone), style = MaterialTheme.typography.bodyMedium, color = Palette.Danger)
-    Button(onClick = onStart, modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp)) { Text(stringResource(Res.string.ui_start)) }
+    // On Windows something before Eigentone can change a quiet tone's level, so that's checked first.
+    LevelCheckedStart(onStart)
 }
 
 @Composable

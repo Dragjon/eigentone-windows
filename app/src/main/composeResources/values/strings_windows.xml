@@ -44,4 +44,15 @@
     <string name="win_output_no_preset">No preset of its own</string>
     <string name="win_outputs_note">The settings below are for the output Windows is playing to. Choose another in Windows' sound settings to set it up.</string>
     <string name="win_tool_about">About this tool</string>
+    <string name="win_level_checking">Checking the sound level…</string>
+    <string name="win_level_title">Windows is changing quiet sounds</string>
+    <string name="win_level_louder">A quiet test tone reached Eigentone %1$s dB louder than it was played, so this tool's results would be off.</string>
+    <string name="win_level_quieter">A quiet test tone reached Eigentone %1$s dB quieter than it was played, so this tool's results would be off.</string>
+    <string name="win_level_drift">A quiet test tone reached Eigentone %1$s dB louder than it was played, and kept getting louder as it played, by %2$s dB. Something before Eigentone is evening out the volume, so this tool's results would be off.</string>
+    <string name="win_level_fix">This is usually the sound driver's own effects, such as Loudness Equalization. In Windows' sound settings, choose this output and set Audio enhancements to Off, then check again. Effects in your sound driver's app, such as Realtek Audio Console, may need turning off there.</string>
+    <string name="win_level_open_settings">Open sound settings</string>
+    <string name="win_level_again">Check again</string>
+    <string name="win_level_anyway">Start anyway</string>
+    <string name="win_refine_apart">A and B differ by up to %1$s dB at some frequencies, at the same loudness.</string>
+    <string name="win_refine_subtle">A and B differ by only %1$s dB at most, so they may sound the same. If they do, choose I can't hear a difference, which keeps your sound.</string>
 </resources>

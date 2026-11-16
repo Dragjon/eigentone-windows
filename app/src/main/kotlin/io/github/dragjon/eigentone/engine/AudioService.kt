@@ -69,7 +69,6 @@ object AudioService {
     fun start(@Suppress("UNUSED_PARAMETER") context: Context = Context.default) {
         if (started) return
         started = true
-        client.start()
 
         scope.launch {
             client.connected.collect { connected ->
@@ -80,6 +79,7 @@ object AudioService {
                 )
                 if (connected) {
                     client.send(op("outputs"))
+                    client.send(op("volume"))
                     // Level readings keep "is anything playing" current, and feed the spectrum and meter.
                     client.send(buildJsonObject { put("op", JsonPrimitive("meters")); put("on", JsonPrimitive(true)) })
                 }
@@ -88,7 +88,11 @@ object AudioService {
         scope.launch {
             // The engine's format, for the status bar, checked every couple of seconds.
             while (true) {
-                if (client.connected.value) client.send(op("status"))
+                if (client.connected.value) {
+                    client.send(op("status"))
+                    // The service only announces the volume when it moves, so it's asked for too.
+                    client.send(op("volume"))
+                }
                 delay(STATUS_POLL_MS)
             }
         }
@@ -104,6 +108,35 @@ object AudioService {
                         it["latencyMs"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
                     )
                 }
+                // Settings' Status, as Android fills it from its effect: the bands the plug-in builds its filter
+                // from while it runs on the playing output, and whether it has taken the latest settings. It takes
+                // them as sound plays, so until then the last answer stands.
+                val playingEngine = engines.firstOrNull { it["output"]?.jsonPrimitive?.content == playing }
+                val seq = m["seq"]?.jsonPrimitive?.content?.toLongOrNull()
+                val applied = playingEngine?.get("appliedSeq")?.jsonPrimitive?.content?.toLongOrNull()
+                val status = Repo.status.value
+                Repo.status.value = status.copy(
+                    bandCount = if (playingEngine != null) EffectEngine.BANDS else 0,
+                    readback = when {
+                        playingEngine == null -> null
+                        seq != null && applied == seq -> "${EffectEngine.BANDS}/${EffectEngine.BANDS}"
+                        else -> status.readback
+                    },
+                    hasControl = OutputDetector.playingHooked() ?: true,
+                )
+            }
+        }
+        scope.launch {
+            // Windows' volume for the playing output, for quiet listening, as Android reads the phone's volume.
+            // Muted keeps the last reading, so unmuting doesn't jump.
+            client.messages.collect { m ->
+                if (m["op"]?.jsonPrimitive?.content != "volume") return@collect
+                val db = m["db"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: return@collect
+                val maxDb = m["maxDb"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0
+                if (m["muted"]?.jsonPrimitive?.booleanOrNull == true) return@collect
+                val below = volumeAttenuation(db, maxDb)
+                if (below != Repo.attenuationDb.value) Log.i(TAG, "Volume: $below dB below full")
+                Repo.attenuationDb.value = below
             }
         }
         scope.launch {
@@ -156,7 +189,13 @@ object AudioService {
                     delay(APPLY_INTERVAL_MS)
                 }
         }
+        // Connects last, once every listener above is in place, so the service's first replies aren't missed.
+        scope.launch { client.start() }
     }
+
+    /** How far below full the volume is, from Windows' level and the top of its range, in whole tenths. */
+    internal fun volumeAttenuation(db: Double, maxDb: Double): Double =
+        (kotlin.math.round((maxDb - db) * 10) / 10).coerceAtLeast(0.0)
 
     /** Android refreshes its Quick Settings tile here. The tray icon will do the same. */
     fun requestTileRefresh(@Suppress("UNUSED_PARAMETER") context: Context) = Unit
@@ -193,6 +232,9 @@ object OutputDetector {
 
     /** The names of the outputs that are connected, kept current as devices come and go. */
     val names = kotlinx.coroutines.flow.MutableStateFlow<List<String>>(emptyList())
+
+    /** Whether Eigentone is in the playing output's effects, or null before the service has said. */
+    fun playingHooked(): Boolean? = playing?.get("hooked")?.jsonPrimitive?.booleanOrNull
 
     /** The playing output's ID, as the service names engines. */
     fun playingGuid(): String? = playing?.get("guid")?.jsonPrimitive?.content
