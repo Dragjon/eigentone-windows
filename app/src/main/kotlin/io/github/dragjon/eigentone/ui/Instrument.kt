@@ -14,6 +14,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -114,25 +117,55 @@ fun ToolScreen(
             }
             if (progress != null) StepRail(progress)
         }
-        Column(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Column(
-                Modifier
-                    .widthIn(max = 560.dp)
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(spacing),
-                content = content,
-            )
+        // In a wide pane the page is wider than a phone's, and the tool's own explanation stands beside it, so
+        // the room either side isn't left empty.
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val aside = LocalToolAside.current?.takeIf { maxWidth >= TOOL_ASIDE_FROM_DP.dp }
+            Row(Modifier.fillMaxSize()) {
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Column(
+                        Modifier
+                            .widthIn(max = TOOL_PAGE_MAX_DP.dp)
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(spacing),
+                        content = content,
+                    )
+                }
+                if (aside != null) {
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.Line))
+                    Column(
+                        Modifier
+                            .width(TOOL_ASIDE_DP.dp)
+                            .fillMaxHeight()
+                            .background(Palette.Surface)
+                            .verticalScroll(rememberScrollState())
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(stringResource(Res.string.win_tool_about).uppercase(), style = MaterialTheme.typography.labelSmall, color = Palette.TextDim)
+                        Text(stringResource(aside.title), style = MaterialTheme.typography.titleMedium, color = Palette.Text)
+                        Text(stringResource(aside.body), style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
+                    }
+                }
+            }
         }
     }
 }
+
+/** The explanation of the tool open in the Tools pane, shown beside it when there's room. */
+val LocalToolAside = androidx.compose.runtime.compositionLocalOf<Tip?> { null }
+
+private const val TOOL_PAGE_MAX_DP = 760
+private const val TOOL_ASIDE_DP = 320
+private const val TOOL_ASIDE_FROM_DP = 1000
 
 /**
  * The steps of a tool, such as its intro, its questions and its result. A new step slides in from the

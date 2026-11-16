@@ -38,4 +38,10 @@
     <string name="win_curve_on">The whole sound as it plays on %1$s</string>
     <string name="win_edit_in_tune">Edit in Tune</string>
     <string name="win_device_curve">What plays on this output: %1$s, with this output's correction and your ears</string>
+    <string name="win_outputs">Outputs</string>
+    <string name="win_output_playing">Playing now</string>
+    <string name="win_output_preset">Switches to %1$s</string>
+    <string name="win_output_no_preset">No preset of its own</string>
+    <string name="win_outputs_note">The settings below are for the output Windows is playing to. Choose another in Windows' sound settings to set it up.</string>
+    <string name="win_tool_about">About this tool</string>
 </resources>

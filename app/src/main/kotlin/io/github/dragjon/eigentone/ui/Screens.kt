@@ -378,7 +378,7 @@ fun EigentoneApp(onSetEnabled: (Boolean) -> Unit) {
     }
     // The tools open in the Tools module's pane, not over the whole window. Opened from another module, closing
     // one goes back there.
-    var tool by rememberSaveable { mutableStateOf<StudioTool?>(null) }
+    var tool by rememberSaveable { mutableStateOf(System.getenv("EIGENTONE_TOOL")?.let { t -> StudioTool.entries.firstOrNull { it.name == t } }) }
     var toolReturn by rememberSaveable { mutableStateOf<Tab?>(null) }
     fun openTool(t: StudioTool) {
         if (tab != Tab.TOOLS) toolReturn = tab
@@ -4276,7 +4276,9 @@ private fun ToolsWorkspace(tool: StudioTool?, setTool: (StudioTool?) -> Unit, cl
             }
         }
         Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.Line))
+        val tip = TOOL_GROUPS.flatMap { it.second }.firstOrNull { it.tool == tool }?.tip
         Box(Modifier.weight(1f).fillMaxHeight().background(Palette.Background)) {
+            CompositionLocalProvider(LocalToolAside provides tip) {
             when (tool) {
                 null -> ToolOverview(::choose)
                 StudioTool.FINDER -> FinderScreen(onSetEnabled = onSetEnabled, onClose = closeTool)
@@ -4288,6 +4290,7 @@ private fun ToolsWorkspace(tool: StudioTool?, setTool: (StudioTool?) -> Unit, cl
                 StudioTool.CURVES -> CurveCompareScreen(onClose = closeTool)
                 StudioTool.SHAPES -> ShapeBrowser(onClose = closeTool)
                 StudioTool.CONSOLE -> DebugConsoleScreen(onClose = closeTool)
+            }
             }
         }
     }
@@ -4388,6 +4391,7 @@ private fun DevicesWorkspace(state: AppState, scrolls: Map<Tab, ScrollState>) {
     val output by Repo.output.collectAsStateWithLifecycle()
     Row(Modifier.fillMaxSize()) {
         PanelTrack(DEVICE_PANEL_DP.dp, scrolls.getValue(Tab.HEADPHONES), background = Palette.Surface) {
+            OutputsSection(state)
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(PANEL_GAP_DP.dp)) { HeadphonesTab(state) }
         }
         Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.Line))
@@ -4397,6 +4401,55 @@ private fun DevicesWorkspace(state: AppState, scrolls: Map<Tab, ScrollState>) {
             title = output.label,
             subtitle = stringResource(Res.string.win_device_curve, state.current.name),
             modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * Every connected output, the one playing first, each with the preset it switches to. Eigentone follows the
+ * output Windows plays to, so the settings below are always for the one playing.
+ */
+@Composable
+private fun OutputsSection(state: AppState) {
+    val outputs by io.github.dragjon.eigentone.engine.OutputDetector.all.collectAsStateWithLifecycle()
+    if (outputs.isEmpty()) return
+    SettingsSection(stringResource(Res.string.win_outputs), summary = "${outputs.size}") {
+        outputs.forEach { o ->
+            val assigned = Profiles.presetIdFor(state, o.info.key)?.let(Repo::findPreset)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(if (o.playing) Palette.SurfaceHigh else Color.Transparent)
+                    .padding(end = 12.dp, top = 5.dp, bottom = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.width(3.dp).height(30.dp).background(if (o.playing) Palette.Lit else Color.Transparent))
+                Icon(
+                    painterResource(o.info.kind.icon()),
+                    contentDescription = null,
+                    tint = if (o.playing) Palette.Lit else Palette.TextDim,
+                    modifier = Modifier.padding(start = 9.dp, end = 10.dp).size(18.dp),
+                )
+                Column(Modifier.weight(1f)) {
+                    Text(o.name, style = MaterialTheme.typography.bodyMedium, color = Palette.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        listOfNotNull(
+                            if (o.playing) stringResource(Res.string.win_output_playing) else null,
+                            assigned?.let { stringResource(Res.string.win_output_preset, it.name) } ?: stringResource(Res.string.win_output_no_preset),
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Palette.TextDim,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        Text(
+            stringResource(Res.string.win_outputs_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = Palette.TextDim,
+            modifier = Modifier.padding(horizontal = 12.dp),
         )
     }
 }

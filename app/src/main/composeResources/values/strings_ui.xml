@@ -16,7 +16,7 @@
     <string name="ui_dynamic_eq" formatted="false">Clarity</string>
     <string name="ui_harshness_tamer" formatted="false">Harshness tamer</string>
     <string name="ui_boom_tamer" formatted="false">Boom tamer</string>
-    <string name="ui_tamers_unavailable" formatted="false">This phone doesn't allow the extra bands these need, so they have no effect here.</string>
+    <string name="ui_tamers_unavailable" formatted="false">These need extra bands the audio engine isn't giving, so they have no effect right now.</string>
     <string name="help_dynamic_eq_title" formatted="false">Clarity</string>
     <string name="help_dynamic_eq_body" formatted="false">Turns a range of frequencies down only while it's too loud, so the rest of the time your sound is untouched. A normal EQ cut would dull it all the time. Saved with each preset.</string>
     <string name="help_harsh_tamer_title" formatted="false">Harshness tamer</string>
@@ -25,7 +25,7 @@
     <string name="help_boom_tamer_body" formatted="false">Holds back deep bass below about 110 Hz when it surges, so heavy tracks stay under control without thinning out the rest.</string>
     <string name="help_add_shared_body" formatted="false">Paste a code someone shared with you. It's added as a new preset, and your others are kept.</string>
     <string name="help_add_shared_title" formatted="false">Add a shared sound</string>
-    <string name="help_analyser_body" formatted="false">Shows the level of each frequency behind the curve, only while this screen is open. Android requires microphone permission for this, but only levels of playing audio are read. The lowest bands look coarse.\n\nThe slim bar beside the graph shows the output level. Tap it to read about it.</string>
+    <string name="help_analyser_body" formatted="false">Shows the level of each frequency behind the curve, from what Eigentone's plug-in plays, only while this screen is open. The lowest bands look coarse.\n\nThe slim bar beside the graph shows the output level. Click it to read about it.</string>
     <string name="help_analyser_title" formatted="false">Spectrum analyser</string>
     <string name="help_auto_switch_body" formatted="false">Loads the assigned preset whenever this output connects. If a per-app preset also applies, the latest change wins: connecting headphones loads the output's preset, and a different app starting to play loads that app's.</string>
     <string name="help_auto_switch_title" formatted="false">Switch automatically</string>
@@ -35,7 +35,7 @@
     <string name="help_balance_title" formatted="false">Balance</string>
     <string name="help_bass_body" formatted="false">Raises or lowers the low end, up to the frequency set below it. This is saved with the preset when you save or update it.</string>
     <string name="help_bass_title" formatted="false">Bass</string>
-    <string name="help_battery_body" formatted="false">Battery optimisation can stop apps in the background. Allowing background use helps keep the EQ running when the phone is locked.</string>
+    <string name="help_battery_body" formatted="false">Battery optimisation can stop apps in the background. Allowing background use helps keep the EQ running when the PC is locked.</string>
     <string name="help_battery_title" formatted="false">Background use</string>
     <string name="help_compare_blind_body" formatted="false">Hides which sound is which until you've chosen, in a random order, so a name can't sway you. Your choice is revealed at the end.</string>
     <string name="help_compare_blind_title" formatted="false">Blind comparison</string>
@@ -56,14 +56,14 @@
     <string name="help_compressor_ratio_title" formatted="false">Ratio</string>
     <string name="help_compressor_release_body" formatted="false">How quickly it lets go afterwards. Very short values can make the sound flutter, and long values make it steadier.</string>
     <string name="help_compressor_release_title" formatted="false">Release</string>
-    <string name="help_compressor_threshold_body" formatted="false">Anything louder than this gets turned down. Lower values compress more of the music. Phone volume doesn't change this, because it happens before the volume control.</string>
+    <string name="help_compressor_threshold_body" formatted="false">Anything louder than this gets turned down. Lower values compress more of the music. The Windows volume doesn't change this, because it happens before the volume control.</string>
     <string name="help_compressor_threshold_title" formatted="false">Threshold</string>
     <string name="help_compressor_title" formatted="false">Multiband compressor</string>
     <string name="help_correction_body" formatted="false">How much of this preset's own filters to apply, such as a headphone correction. 100% is as designed, and 0% removes them while keeping your faders and tone. If a sound seems muted or dull, try turning this down.</string>
     <string name="help_correction_title" formatted="false">Headphone correction</string>
-    <string name="help_crash_report_body" formatted="false">A technical record of the last crash, kept only on this phone. You choose whether to share it, and deleting it removes it.</string>
+    <string name="help_crash_report_body" formatted="false">A technical record of the last crash, kept only on this PC. You choose whether to share it, and deleting it removes it.</string>
     <string name="help_crash_report_title" formatted="false">Crash report</string>
-    <string name="help_diagnostics_body" formatted="false">Copies technical details about your phone and the audio engine, for reporting a problem. Nothing is sent anywhere unless you paste it somewhere.</string>
+    <string name="help_diagnostics_body" formatted="false">Copies technical details about your PC and the audio engine, for reporting a problem. Nothing is sent anywhere unless you paste it somewhere.</string>
     <string name="help_diagnostics_title" formatted="false">Status details</string>
     <string name="help_ear_correction_body" formatted="false">A separate EQ for each ear, from the hearing check. It closes half of the gap between your ears at each frequency, and stays on when you change preset. A check also measures the headphones, so each pair keeps its own, which turns on when they connect. Fit can affect the result, so repeat the check if it sounds off. Each pair's latest check is kept, so you can turn this on later or again after removing it.</string>
     <string name="help_ear_correction_title" formatted="false">Ear correction</string>
@@ -91,10 +91,10 @@
     <string name="help_gain_title" formatted="false">Gain</string>
     <string name="help_graphic_bands_body" formatted="false">More bands allow finer changes. 10 is quickest, and 31 is the most precise but harder to set by finger. Switching keeps your curve's overall shape.</string>
     <string name="help_graphic_bands_title" formatted="false">Bands</string>
-    <string name="help_graphic_body" formatted="false">Fixed faders from deep bass to high treble. They show the whole sound at each band, the preset's own curve plus your change, so +3 dB means 3 dB louder than no EQ at all. Picking a preset moves them to its curve, and Reset puts them back there. Where a preset cuts further than a fader reaches, such as below a phone speaker's range, the fader rests at the bottom and the readout gives the real figure. Your changes are saved with the preset.\n\nTOUCH: Precision (crosshair) only moves a fader when you grab its cap, then moves it from where it is, so a tap or a finger along the rails changes nothing. Double tap a fader to return it to the preset's saved setting, in either mode. Smooth (wave) lets you sweep across to draw a curve.\n\nVIEW: Scroll (arrows) gives each fader a finger's width, with the whole curve above them. Swipe sideways in Precision, or in Smooth hold near an edge while drawing to slide along, and in either you can tap or drag the overview. Fit all keeps every fader in view.\n\nThe sideways phone button opens the faders across the whole screen in landscape.</string>
-    <string name="help_graphic_shapes_body" formatted="false">Ready-made curves to start from. Tap one, then adjust it to taste. It replaces the current faders, and your preset's headphone correction stays underneath, so it adds to that.</string>
+    <string name="help_graphic_body" formatted="false">Fixed faders from deep bass to high treble. They show the whole sound at each band, the preset's own curve plus your change, so +3 dB means 3 dB louder than no EQ at all. Picking a preset moves them to its curve, and Reset puts them back there. Where a preset cuts further than a fader reaches, the fader rests at the bottom and the readout gives the real figure. Your changes are saved with the preset.\n\nPrecision (crosshair) only moves a fader when you grab its cap, then moves it from where it is. Double-click a fader to return it to the preset's saved setting. Smooth (wave) lets you drag across the faders to draw a curve.</string>
+    <string name="help_graphic_shapes_body" formatted="false">Ready-made curves to start from. Click one, then adjust it to taste. It replaces the current faders, and your preset's headphone correction stays underneath, so it adds to that.</string>
     <string name="help_graphic_shapes_title" formatted="false">Shapes</string>
-    <string name="help_graphic_smooth_body" formatted="false">Softens sharp steps between neighbouring faders, which often sounds more natural. Tap it again for a stronger effect.</string>
+    <string name="help_graphic_smooth_body" formatted="false">Softens sharp steps between neighbouring faders, which often sounds more natural. Click it again for a stronger effect.</string>
     <string name="help_graphic_smooth_title" formatted="false">Smoothen</string>
     <string name="help_graphic_title" formatted="false">Graphic EQ</string>
     <string name="help_guide_body" formatted="false">A few short tips, in the order that makes the most difference.</string>
@@ -111,8 +111,8 @@
     <string name="help_limiter_threshold_body" formatted="false">The level where the limiter starts working. Keep it near -1 dB. Much lower values make loud parts quieter and flatter.</string>
     <string name="help_limiter_threshold_title" formatted="false">Limiter threshold</string>
     <string name="help_limiter_title" formatted="false">Limiter</string>
-    <string name="help_loudness_body" formatted="false">Ears lose bass, and some treble, faster than midrange as music gets quieter. This keeps the balance you hear at your usual volume as you turn it down, using the ISO 226 equal-loudness contours. It follows the phone's volume, so it's an estimate of the level at your ears, and each pair of headphones keeps its own usual volume.</string>
-    <string name="help_loudness_strength_body" formatted="false">How much of the correction to use. 100% is the full amount from the contours. Lower it if quiet listening sounds too boomy. Each output keeps its own, so the phone speaker can use less than your headphones.</string>
+    <string name="help_loudness_body" formatted="false">Ears lose bass, and some treble, faster than midrange as music gets quieter. This keeps the balance you hear at your usual volume as you turn it down, using the ISO 226 equal-loudness contours. It follows the Windows volume, so it's an estimate of the level at your ears, and each output keeps its own usual volume.</string>
+    <string name="help_loudness_strength_body" formatted="false">How much of the correction to use. 100% is the full amount from the contours. Lower it if quiet listening sounds too boomy. Each output keeps its own, so your speakers can use less than your headphones.</string>
     <string name="help_loudness_strength_title" formatted="false">Strength</string>
     <string name="help_loudness_title" formatted="false">Adapt to volume</string>
     <string name="help_low_latency_body" formatted="false">Reduces processing delay for games and video, but bass control gets less precise.</string>
@@ -131,11 +131,11 @@
     <string name="help_night_schedule_title" formatted="false">Night mode schedule</string>
     <string name="help_noise_mode_body" formatted="false">Earbuds can sound different in each mode, so each can have its own preset. Eigentone can't read the mode from your earbuds, so set it here to match. A mode with no preset uses this output's main one.</string>
     <string name="help_noise_mode_title" formatted="false">Earbud noise mode</string>
-    <string name="help_output_preset_body" formatted="false">Choose the preset that loads for what's connected now, such as your earbuds or the phone speaker.</string>
+    <string name="help_output_preset_body" formatted="false">Choose the preset that loads for the output playing now, such as your headphones or your PC's speakers.</string>
     <string name="help_output_preset_title" formatted="false">Preset for this output</string>
     <string name="help_peak_finder_body" formatted="false">Plays notes and asks whether each stands out from those beside it. It asks twice about anything you flag, narrows it down, then suggests filters you can compare with music before keeping. It finds what your ears notice, and isn't a measurement.</string>
     <string name="help_peak_finder_title" formatted="false">Find peaks for me</string>
-    <string name="help_per_app_access_body" formatted="false">Android only reveals which app is playing to apps with notification access. Eigentone ignores your notifications and only checks the playing app, and that stays on your phone. Without it, everything else still works.</string>
+    <string name="help_per_app_access_body" formatted="false">Android only reveals which app is playing to apps with notification access. Eigentone ignores your notifications and only checks the playing app, and that stays on your PC. Without it, everything else still works.</string>
     <string name="help_per_app_access_title" formatted="false">Why this access is needed</string>
     <string name="help_per_app_body" formatted="false">Loads a preset when a chosen app starts playing, such as one sound for Spotify and another for YouTube. If an output preset also applies, the latest change wins: a different app starting to play loads that app's preset, and connecting headphones loads the output's.</string>
     <string name="help_per_app_title" formatted="false">Per-app presets</string>
@@ -151,15 +151,15 @@
     <string name="help_restore_title" formatted="false">Restore presets</string>
     <string name="help_save_new_body" formatted="false">Saves the current sound as a new preset of your own: filters, graphic EQ, tone, surround, compressor and preamp.</string>
     <string name="help_save_new_title" formatted="false">Save as new</string>
-    <string name="help_shape_amount_body" formatted="false">How strongly the shape is applied. 100% is as designed, lower is more subtle, and higher is stronger. Double-tap to return to 100%.</string>
+    <string name="help_shape_amount_body" formatted="false">How strongly the shape is applied. 100% is as designed, lower is more subtle, and higher is stronger. Double-click to return to 100%.</string>
     <string name="help_shape_amount_title" formatted="false">Amount</string>
-    <string name="help_shape_library_body" formatted="false">Search by genre, instrument, situation or problem, or filter by what a curve does, such as More bass. Tap a shape to hear it on your music, matched in loudness so the comparison is fair, and nothing is kept until you choose Use this. The level may change slightly when you do. Shapes marked with a source come from published data, such as equal-loudness contours and Harman's listening tests. The rest are designed starting points, not measurements. Thumbnails run from 20 Hz on the left to 20 kHz on the right.</string>
+    <string name="help_shape_library_body" formatted="false">Search by genre, instrument, situation or problem, or filter by what a curve does, such as More bass. Click a shape to hear it on your music, matched in loudness so the comparison is fair, and nothing is kept until you choose Use this. The level may change slightly when you do. Shapes marked with a source come from published data, such as equal-loudness contours and Harman's listening tests. The rest are designed starting points, not measurements. Thumbnails run from 20 Hz on the left to 20 kHz on the right.</string>
     <string name="help_shape_library_title" formatted="false">Shape library</string>
     <string name="help_shape_mode_body" formatted="false">Replace swaps your faders for this shape. Add puts it on top of your current faders, so you can layer shapes, such as a genre plus a fix for something too harsh.</string>
     <string name="help_shape_mode_title" formatted="false">Replace or Add</string>
     <string name="help_share_body" formatted="false">Creates a text code holding this whole sound, which you can send to someone. It contains EQ settings only, and nothing about you.</string>
     <string name="help_share_title" formatted="false">Share this sound</string>
-    <string name="help_start_on_boot_body" formatted="false">Turns the EQ back on after a phone restart or app update, if it was on before.</string>
+    <string name="help_start_on_boot_body" formatted="false">Turns the EQ back on when you sign in to Windows, if it was on before.</string>
     <string name="help_start_on_boot_title" formatted="false">Start automatically</string>
     <string name="help_status_apps_body" formatted="false">The players Eigentone is processing in Per app mode.</string>
     <string name="help_status_apps_title" formatted="false">Attached apps</string>
@@ -173,7 +173,7 @@
     <string name="help_status_output_title" formatted="false">Output</string>
     <string name="help_status_readback_body" formatted="false">Eigentone reads its settings back from Android to confirm they were applied. All bands should match, such as 128/128.</string>
     <string name="help_status_readback_title" formatted="false">Bands accepted</string>
-    <string name="help_status_repairs_body" formatted="false">How many times Eigentone has rebuilt the effect after losing it since it last started, such as when Android's audio system restarts. Occasional repairs are fine, but a rising number suggests a problem on this phone.</string>
+    <string name="help_status_repairs_body" formatted="false">How many times Eigentone has rebuilt the effect after losing it since it last started, such as when the Windows audio service restarts. Occasional repairs are fine, but a rising number suggests a problem.</string>
     <string name="help_status_repairs_title" formatted="false">Repairs</string>
     <string name="help_status_running_body" formatted="false">Whether the audio effect is currently loaded.</string>
     <string name="help_status_running_title" formatted="false">Running</string>
@@ -181,15 +181,15 @@
     <string name="help_stereo_width_title" formatted="false">Stereo width</string>
     <string name="help_strength_body" formatted="false">More or less of everything this preset does to the tone. 100% is as saved, 0% is flat, and 150% exaggerates it. An easy way to soften a sound that's too much. Surround, preamp and cut-off filters aren't affected.</string>
     <string name="help_strength_title" formatted="false">Preset strength</string>
-    <string name="help_surround_body" formatted="false">Makes the sound feel wider than your head, using your phone's own effect. It doesn't track head movement or create real surround channels. Higher values can make vocals feel less centred. This is saved with the preset.</string>
+    <string name="help_surround_body" formatted="false">Makes the sound feel wider than your head, as if from speakers in front of you, using a model of how sound reaches each ear. It doesn't track head movement or create real surround channels. Higher values can make vocals feel less centred. This is saved with the preset.</string>
     <string name="help_surround_title" formatted="false">Virtual surround</string>
     <string name="help_sweep_body" formatted="false">Plays a tone that climbs through the frequencies. Mark where it jumps out or nearly disappears, and Eigentone adds narrow filters there. It finds what your ears notice, and isn't a measurement. Sweeps also reveal rattles and resonances that music can hide. If a moving tone is hard to judge, pause and compare the spot with nearby notes.</string>
     <string name="help_sweep_hear_eq_body" formatted="false">Off lets you hear the headphones without your EQ, which is best for finding problems. On lets you check how your sound handles them, including filters you've added.</string>
     <string name="help_sweep_hear_eq_title" formatted="false">Hear through my EQ</string>
-    <string name="help_sweep_level_body" formatted="false">How loud the tone is, before your phone's volume. It can't go above a set limit, so it stays gentle at a normal volume.</string>
+    <string name="help_sweep_level_body" formatted="false">How loud the tone is, before the Windows volume. It can't go above a set limit, so it stays gentle at a normal volume.</string>
     <string name="help_sweep_level_title" formatted="false">Tone level</string>
     <string name="help_sweep_title" formatted="false">Frequency sweep</string>
-    <string name="help_system_surround_body" formatted="false">Swaps Eigentone's stereo width for the effect built into your phone. It's stronger, but it varies by phone and can colour the sound. Android has deprecated it, so a future update could remove it. If your phone refuses it, stereo width takes over.</string>
+    <string name="help_system_surround_body" formatted="false">Swaps Eigentone's stereo width for the effect built into your PC. It's stronger, but it varies by phone and can colour the sound. Android has deprecated it, so a future update could remove it. If your PC refuses it, stereo width takes over.</string>
     <string name="help_system_surround_title" formatted="false">Phone's virtual surround</string>
     <string name="help_treble_body" formatted="false">Raises or lowers everything above about 8 kHz. This is saved with the preset when you save or update it.</string>
     <string name="help_treble_title" formatted="false">Treble</string>
@@ -384,7 +384,7 @@
     <string name="ui_this_finds_what_you_hear_on_these_headph" formatted="false">This finds what you hear on these headphones. It isn't a measurement.</string>
     <string name="ui_this_is_what_you_preferred_with_this_mus" formatted="false">This is what you preferred with this music and these headphones. Other songs may suit it differently, and you can run the test again at any time.</string>
     <string name="ui_this_isn_t_a_medical_hearing_test_and_ca" formatted="false">This isn't a medical hearing test and can't diagnose anything. If you're worried about your hearing, see a professional.</string>
-    <string name="ui_this_phone_wouldn_t_play_the_tone" formatted="false">This phone wouldn't play the tone.</string>
+    <string name="ui_this_phone_wouldn_t_play_the_tone" formatted="false">Windows wouldn't play the tone.</string>
     <string name="ui_threshold" formatted="false">Threshold</string>
     <string name="ui_tone" formatted="false">Tone</string>
     <string name="ui_tone_level" formatted="false">Tone level</string>
@@ -438,7 +438,7 @@
     <string name="ui_correction" formatted="false">%1$s correction</string>
     <string name="ui_question_of" formatted="false">Question %1$s of %2$s</string>
     <string name="ui_play_version" formatted="false">Play version %1$s</string>
-    <string name="ui_tap_to_hear" formatted="false">Tap to hear</string>
+    <string name="ui_tap_to_hear" formatted="false">Click to hear</string>
     <string name="ui_playing" formatted="false">Playing</string>
     <string name="ui_new" formatted="false">New</string>
     <string name="ui_changes_from" formatted="false">Changes from %1$s</string>
@@ -455,7 +455,7 @@
     <string name="ui_next_tone_coming" formatted="false">Next tone coming…</string>
     <string name="ui_listen_now_three_short_beeps" formatted="false">Listen now: three short beeps…</string>
     <string name="ui_did_you_hear_it" formatted="false">Did you hear it?</string>
-    <string name="ui_this_phone_wouldn_t_play_the" formatted="false">This phone wouldn't play the tone. Try Play again.</string>
+    <string name="ui_this_phone_wouldn_t_play_the" formatted="false">Windows wouldn't play the tone. Try Play again.</string>
     <string name="ui_this_lifts_the_frequencies_you_heard" formatted="false">This lifts the frequencies you heard least well, by half the difference. These headphones' own tuning is part of the result, so it suits them best.</string>
     <string name="ui_your_results_were_about_even_across" formatted="false">Your results were about even across frequencies, so there's no shared curve to add.</string>
     <string name="ui_your_ears_differed_by_up_to" formatted="false">Your ears differed by up to %1$s dB at some frequencies, which can also come from fit. Eigentone can close half of that gap, frequency by frequency, with a separate EQ for each ear. It's saved for %2$s, and you can also do this later on the device tab, under Your ears.</string>
@@ -480,7 +480,7 @@
     <string name="ui_about_the_same" formatted="false">About the same</string>
     <string name="ui_with_filters" formatted="false">With filters</string>
     <string name="ui_hear_tuned" formatted="false">Hear tuned</string>
-    <string name="ui_eq_in_a_headphone_app_such" formatted="false">EQ in a headphone app, such as soundcore, Sony or Galaxy Wearable, adds to this one, so changes can apply twice. For the clearest results, set it to flat or default, and turn off any bass boost.</string>
+    <string name="ui_eq_in_a_headphone_app_such" formatted="false">EQ in other audio software, such as Realtek Audio Console, Dolby Access, Nahimic or your headphones' own app, adds to this one, so changes can apply twice. For the clearest results, set it to flat or default, and turn off any bass boost.</string>
     <string name="ui_correct" formatted="false">Correct %1$s?</string>
     <string name="ui_a_correction_evens_out_these_headphones" formatted="false">A correction evens out these headphones' sound, using published measurements. You can undo it or turn it down at any time.</string>
     <string name="ui_find_a_correction" formatted="false">Find a correction</string>
@@ -493,8 +493,8 @@
     <string name="ui_copy_status_details" formatted="false">Copy status details</string>
     <string name="ui_copied" formatted="false">Copied</string>
     <string name="ui_no_filters_yet_add_one_to" formatted="false">No filters yet. Add one to start shaping the sound.</string>
-    <string name="ui_tap_a_point_on_the_curve" formatted="false">Tap a point on the curve to edit it.</string>
-    <string name="ui_this_phone_refused_the_analyser" formatted="false">This phone refused the analyser.</string>
+    <string name="ui_tap_a_point_on_the_curve" formatted="false">Click a point on the curve to edit it.</string>
+    <string name="ui_this_phone_refused_the_analyser" formatted="false">The analyser isn't available right now.</string>
     <string name="ui_filter_of" formatted="false">Filter %1$s of %2$s</string>
     <string name="ui_bell" formatted="false">Bell</string>
     <string name="ui_low_shelf" formatted="false">Low shelf</string>
@@ -510,11 +510,11 @@
     <string name="ui_measure_action" formatted="false">Measure with a microphone</string>
     <string name="ui_measure_action_detail" formatted="false">Plays tones, listens, and evens out the sound where you sit</string>
     <string name="ui_measure_title" formatted="false">Measure %1$s</string>
-    <string name="ui_measure_intro" formatted="false">Eigentone plays a set of tones through the speaker for about 15 seconds while the microphone listens, three times, from three spots a little apart around where you sit. Then it works out a gentle correction.\n\nSet the volume to how loud you usually listen, keep the room quiet, and hold the phone where your head would be, with its microphone facing the speaker. The EQ steps aside while the tones play.</string>
-    <string name="ui_measure_phone_mic" formatted="false">This uses the phone's own microphone, which hears some frequencies more than others, mostly the deepest bass and the highest treble. The correction leaves those ends alone and keeps boosts small, so it stays safe. A USB measurement microphone gives a more exact result.</string>
+    <string name="ui_measure_intro" formatted="false">Eigentone plays a set of tones through the speaker for about 15 seconds while the microphone listens, three times, from three spots a little apart around where you sit. Then it works out a gentle correction.\n\nSet the volume to how loud you usually listen, keep the room quiet, and put the microphone where your head would be, facing the speaker. The EQ steps aside while the tones play.</string>
+    <string name="ui_measure_phone_mic" formatted="false">This uses the PC's microphone, which hears some frequencies more than others, mostly the deepest bass and the highest treble. The correction leaves those ends alone and keeps boosts small, so it stays safe. A USB measurement microphone gives a more exact result.</string>
     <string name="ui_measure_usb_mic" formatted="false">A USB microphone is plugged in, so it's used for the measurement.</string>
     <string name="ui_measure_playing" formatted="false">Measuring spot %1$d of %2$d. Keep still and quiet.</string>
-    <string name="ui_measure_move" formatted="false">Spot %1$d of %2$d done. Move the phone about 30 cm, still around where you sit, then measure the next one.</string>
+    <string name="ui_measure_move" formatted="false">Spot %1$d of %2$d done. Move the microphone about 30 cm, still around where you sit, then measure the next one.</string>
     <string name="ui_measure_next_spot" formatted="false">Measure next spot</string>
     <string name="ui_measure_result" formatted="false">The faint line is what the microphone heard, averaged over the three spots. The bright line is the correction: it cuts peaks by up to 12 dB and lifts dips by no more than 4 dB, and leaves alone anything the speaker can't really play. It's saved as a preset for this speaker, which loads whenever it connects, and its strength can be turned down like any correction.</string>
     <string name="ui_measure_graph_description" formatted="false">The measured response and the correction, from 20 Hz to 20 kHz</string>
@@ -523,12 +523,12 @@
     <string name="ui_measure_use" formatted="false">Use correction</string>
     <string name="ui_try_again" formatted="false">Try again</string>
     <string name="ui_measure_preset_name" formatted="false">Room correction: %1$s</string>
-    <string name="ui_measure_failed" formatted="false">The phone wouldn't play and record at the same time. Close any app using the microphone and try again.</string>
+    <string name="ui_measure_failed" formatted="false">Windows wouldn't play and record at the same time. Close any app using the microphone and try again.</string>
     <string name="ui_measure_not_heard" formatted="false">The microphone didn't hear the tones. Check that the speaker is playing and turn the volume up, then try again.</string>
     <string name="ui_measure_too_quiet" formatted="false">The tones were too quiet next to the room's noise. Turn the volume up or make the room quieter, then try again.</string>
     <string name="ui_measure_needs_mic" formatted="false">Measuring needs the microphone. Nothing is recorded or kept: only the level of each tone is read.</string>
     <string name="help_measure_title" formatted="false">Measure with a microphone</string>
-    <string name="help_measure_body" formatted="false">For a speaker or a car, where the room changes the sound as much as the speaker does. Eigentone plays steady tones from deep bass to high treble and the microphone reads how loud each one arrives where you sit. Three spots are averaged, because one exact spot has dips a step away doesn't.\n\nThe correction cuts peaks, which rooms are full of, and lifts dips only a little, since filling a dip mostly costs headroom without being heard. A phone's own microphone isn't even across the range, so treat the result as a good start rather than a lab measurement. A USB measurement microphone is used when one is plugged in.\n\nNothing is recorded or kept. Only each tone's level is read.</string>
+    <string name="help_measure_body" formatted="false">For speakers, where the room changes the sound as much as the speakers do. Eigentone plays steady tones from deep bass to high treble and the microphone reads how loud each one arrives where you sit. Three spots are averaged, because one exact spot has dips a step away doesn't.\n\nThe correction cuts peaks, which rooms are full of, and lifts dips only a little, since filling a dip mostly costs headroom without being heard. A laptop's or webcam's microphone isn't even across the range, so treat the result as a good start rather than a lab measurement. A USB measurement microphone gives a more exact one.\n\nNothing is recorded or kept. Only each tone's level is read.</string>
     <string name="ui_dynamic" formatted="false">Dynamic</string>
     <string name="ui_dynamic_detail" formatted="false">Also turn this range down when it gets loud</string>
     <string name="ui_dynamic_no_room" formatted="false">Waiting for a free band. The compressor, Clarity and Bass character are using the ones it needs.</string>
@@ -537,7 +537,7 @@
     <string name="ui_output_peak" formatted="false">Peak %1$s</string>
     <string name="ui_output_meter_description" formatted="false">Output level: average %1$s, peak %2$s</string>
     <string name="help_meter_title" formatted="false">Output level</string>
-    <string name="help_meter_body" formatted="false">The slim bar beside the graph shows how loud everything playing is, read by Android alongside the spectrum. The fill is the average level and the line is the peak, held for a moment so short peaks can be read. The top is full scale.\n\nIt turns red when peaks reach full scale, where sound can distort. If it does, turn the preamp down, or turn on automatic headroom or the limiter in Settings.\n\nAndroid reads the level before the phone's volume on some phones and after it on others, so treat it as a guide to headroom rather than to how loud it is in your ears.</string>
+    <string name="help_meter_body" formatted="false">The slim bar shows how loud everything playing is, read by Eigentone's plug-in. The fill is the average level and the line is the peak, held for a moment so short peaks can be read. The top is full scale.\n\nIt turns red when peaks reach full scale, where sound can distort. If it does, turn the preamp down, or turn on automatic headroom or the limiter in Settings.\n\nThe level is read before the Windows volume, so treat it as a guide to headroom rather than to how loud it is in your ears.</string>
     <string name="ui_channel_both" formatted="false">Both</string>
     <string name="ui_channel_left" formatted="false">Left</string>
     <string name="ui_channel_right" formatted="false">Right</string>
@@ -577,10 +577,10 @@
     <string name="ui_save_preset" formatted="false">Save preset</string>
     <string name="ui_yes" formatted="false">Yes</string>
     <string name="ui_not_checked_yet" formatted="false">Not checked yet</string>
-    <string name="ui_this_phone_only_allowed_bands_so" formatted="false">This phone only allowed %1$s bands, so narrow filters will be less accurate.</string>
+    <string name="ui_this_phone_only_allowed_bands_so" formatted="false">The engine only allowed %1$s bands, so narrow filters will be less accurate.</string>
     <string name="ui_with_earbuds_fit_matters_more_than" formatted="false">With earbuds, fit matters more than any setting. If bass sounds thin, try other ear tips before adding EQ.</string>
     <string name="ui_get_a_good_seal" formatted="false">Get a good seal</string>
-    <string name="ui_eq_in_a_headphone_app_such_2" formatted="false">EQ in a headphone app, such as soundcore, adds to this one. Set it to flat or default, or changes can apply twice.</string>
+    <string name="ui_eq_in_a_headphone_app_such_2" formatted="false">EQ in other audio software, such as Realtek Audio Console or your headphones' own app, adds to this one. Set it to flat or default, or changes can apply twice.</string>
     <string name="ui_use_one_eq_at_a_time" formatted="false">Use one EQ at a time</string>
     <string name="ui_it_picks_a_correction_for_your" formatted="false">It picks a correction for your headphones if one is known, then tunes it to what you prefer. It always checks the result against what you had.</string>
     <string name="ui_start_with_find_my_sound" formatted="false">Start with Find my sound</string>
@@ -600,7 +600,7 @@
     <string name="ui_the_whole_library" formatted="false">The whole library</string>
     <string name="ui_shapes_you_ve_starred" formatted="false">Shapes you've starred</string>
     <string name="ui_no_shapes_match_that" formatted="false">No shapes match that.</string>
-    <string name="ui_tap_the_star_on_any_shape" formatted="false">Tap the star on any shape to keep it here.</string>
+    <string name="ui_tap_the_star_on_any_shape" formatted="false">Click the star on any shape to keep it here.</string>
     <string name="ui_hear" formatted="false">Hear %1$s</string>
     <string name="ui_start_tone" formatted="false">Start tone</string>
     <string name="ui_stop_tone" formatted="false">Stop tone</string>
@@ -719,7 +719,7 @@
     <string name="ui_theme_light" formatted="false">Light</string>
     <string name="ui_theme_dark" formatted="false">Dark</string>
     <string name="help_theme_title" formatted="false">Theme</string>
-    <string name="help_theme_body" formatted="false">Device follows your phone's light or dark setting, including any schedule. Light suits bright places, and Dark suits low light. The sound isn't affected.</string>
+    <string name="help_theme_body" formatted="false">Windows follows your Windows light or dark setting. Light suits bright places, and Dark suits low light. The sound isn't affected.</string>
     <string name="ui_reverb" formatted="false">Reverb</string>
     <string name="ui_reverb_small_room" formatted="false">Small room</string>
     <string name="ui_reverb_medium_room" formatted="false">Medium room</string>
@@ -740,16 +740,16 @@
     <string name="ui_fader_precision" formatted="false">Precision</string>
     <string name="ui_fader_smooth" formatted="false">Smooth</string>
     <string name="help_fader_touch_title" formatted="false">Fader touch</string>
-    <string name="help_fader_touch_body" formatted="false">Precision keeps your finger on the fader you pressed, even if it drifts sideways, and moves it up or down from where it is, so a tap only selects it and never makes it jump. Smooth lets you sweep across the faders to draw a whole curve in one go, and shows them as a continuous line.</string>
-    <string name="ui_fader_overview" formatted="false">Whole fader curve. Tap or drag to scroll the faders there.</string>
+    <string name="help_fader_touch_body" formatted="false">Precision keeps hold of the fader you grabbed, even if the pointer drifts sideways, and moves it up or down from where it is, so a click only selects it and never makes it jump. Smooth lets you drag across the faders to draw a whole curve in one go, and shows them as a continuous line.</string>
+    <string name="ui_fader_overview" formatted="false">Whole fader curve. Click or drag to scroll the faders there.</string>
     <string name="ui_fader_view" formatted="false">Fader view</string>
     <string name="ui_fader_view_scroll" formatted="false">Scroll</string>
     <string name="ui_fader_view_full" formatted="false">Fit all</string>
     <string name="ui_expand_faders" formatted="false">Expand faders</string>
     <string name="help_fader_view_title" formatted="false">Fader view</string>
-    <string name="help_fader_view_body" formatted="false">Scroll gives each fader a finger's width in Precision, and you swipe sideways to reach the rest, with the whole curve shown above them. Tap or drag on that overview to jump. Full screen keeps every fader in view, and adds an expand button that opens them across the whole screen in landscape.</string>
+    <string name="help_fader_view_body" formatted="false">Scroll gives each fader a finger's width in Precision, and you swipe sideways to reach the rest, with the whole curve shown above them. Click or drag on that overview to jump. Full screen keeps every fader in view, and adds an expand button that opens them across the whole screen in landscape.</string>
     <string name="help_fader_controls_title" formatted="false">Fader touch and view</string>
-    <string name="help_fader_controls_body" formatted="false">Precision only moves a fader when you grab its cap, then keeps your finger on it and moves it from where it is, so a tap or a finger along the rails changes nothing. Double tap a fader to return it to the preset's saved setting, in either mode. Smooth lets you sweep across to draw a curve. Scroll gives each fader a finger's width, with the whole curve above them: swipe sideways in Precision, or in Smooth hold near an edge while drawing to slide along, and in either you can tap or drag the overview. Fit all keeps every fader in view. The landscape button at the top opens the faders across the whole screen, turned sideways.</string>
+    <string name="help_fader_controls_body" formatted="false">Precision only moves a fader when you grab its cap, then moves it from where it is, so a click on the rail changes nothing. Smooth lets you drag across the faders to draw a whole curve in one go. In either mode, double-click a fader to return it to the preset's saved setting.</string>
     <string name="ui_pill_touch" formatted="false">Touch</string>
     <string name="ui_pill_view" formatted="false">View</string>
     <string name="ui_strip_show" formatted="false">Show effect details</string>
@@ -768,16 +768,16 @@
     <string name="ui_loudness_graph" formatted="false">What equal loudness is adding right now, from 20 Hz to 20 kHz.</string>
     <string name="ui_usual_volume" formatted="false">Usual volume</string>
     <string name="ui_db_below_full" formatted="false">%1$s dB below full</string>
-    <string name="ui_usual_volume_for" formatted="false">For %1$s. The phone is %2$s dB below full now.</string>
+    <string name="ui_usual_volume_for" formatted="false">For %1$s. Windows is %2$s dB below full now.</string>
     <string name="ui_use_current_volume" formatted="false">Use the current volume</string>
     <string name="help_usual_volume_title" formatted="false">Usual volume</string>
-    <string name="help_usual_volume_body" formatted="false">The volume you normally listen at, where the music sounds balanced. Nothing is added there or louder, and more is added the further below it you go. Set your usual volume, play music, and tap Use the current volume. Each pair of headphones keeps its own.</string>
+    <string name="help_usual_volume_body" formatted="false">The volume you normally listen at, where the music sounds balanced. Nothing is added there or louder, and more is added the further below it you go. Set your usual volume, play music, and click Use the current volume. Each output keeps its own.</string>
     <string name="ui_bass_character" formatted="false">Bass character</string>
     <string name="ui_bass_natural" formatted="false">Natural</string>
     <string name="ui_bass_punch" formatted="false">Punch</string>
     <string name="ui_bass_sustain" formatted="false">Sustain</string>
     <string name="help_bass_character_title" formatted="false">Bass character</string>
-    <string name="help_bass_character_body" formatted="false">How the added bass behaves over time. Natural is a plain lift. Punch lets each kick or bass hit through, then eases its tail, so hits stand out. Sustain catches each hit and brings its tail up, so bass sounds fuller and lasts longer. Punch and Sustain work on the deep bass below about 110 Hz, and need a phone that allows the extra compressor bands.</string>
+    <string name="help_bass_character_body" formatted="false">How the added bass behaves over time. Natural is a plain lift. Punch lets each kick or bass hit through, then eases its tail, so hits stand out. Sustain catches each hit and brings its tail up, so bass sounds fuller and lasts longer. Punch and Sustain work on the deep bass below about 110 Hz.</string>
     <string name="ui_limiter_safe" formatted="false">Safe</string>
     <string name="ui_limiter_transparent" formatted="false">Transparent</string>
     <string name="ui_limiter_brickwall" formatted="false">Brickwall</string>
@@ -853,14 +853,14 @@
     <string name="ui_settings_scope" formatted="false">These apply whichever preset is in use. The Equaliser and Effects tabs change the preset itself.</string>
     <string name="ui_stereo_and_ears" formatted="false">Stereo and ears</string>
     <string name="ui_virtual_surround_short" formatted="false">Virtual surround</string>
-    <string name="ui_surround_from_settings" formatted="false">Uses the phone's virtual surround, which is set in Settings</string>
+    <string name="ui_surround_from_settings" formatted="false">Uses the PC's virtual surround, which is set in Settings</string>
     <string name="ui_tab_headphones" formatted="false">Headphones</string>
-    <string name="ui_tab_phone" formatted="false">Phone</string>
+    <string name="ui_tab_phone" formatted="false">This PC</string>
     <string name="ui_tab_earbuds" formatted="false">Earbuds</string>
     <string name="ui_tab_speaker" formatted="false">Speaker</string>
     <string name="ui_tab_car" formatted="false">Car</string>
     <string name="ui_find_earbuds" formatted="false">Find earbuds</string>
-    <string name="ui_device_scope_phone" formatted="false">The phone's own speaker. Kept for it, and used again whenever nothing else is connected.</string>
+    <string name="ui_device_scope_phone" formatted="false">The PC's own speakers. Kept for them, and used again whenever they play.</string>
     <string name="ui_device_scope_speaker" formatted="false">Kept for this speaker, and used again whenever it's connected.</string>
     <string name="ui_device_scope_car" formatted="false">Kept for this car, and used again whenever it's connected.</string>
     <string name="ui_ears_need_headphones" formatted="false">The hearing check and a separate EQ for each ear need headphones or earbuds. %1$s reaches both ears at once, and the room changes what each one hears.</string>
@@ -884,7 +884,7 @@
     <string name="welcome_finish" formatted="false">Start listening</string>
     <string name="welcome_step_of" formatted="false">Step %1$d of %2$d</string>
     <string name="welcome_hello_title" formatted="false">Welcome to Eigentone</string>
-    <string name="welcome_hello_body" formatted="false">An equaliser for everything your phone plays, that keeps the sound right as you switch headphones.</string>
+    <string name="welcome_hello_body" formatted="false">An equaliser for everything your PC plays, that keeps the sound right as you switch between headphones and speakers.</string>
     <string name="welcome_feature_eq" formatted="false">Shape the sound with faders, or start from a shape</string>
     <string name="welcome_feature_headphones" formatted="false">Correct your headphones and fit them to your ears</string>
     <string name="welcome_feature_presets" formatted="false">Save sounds, and switch automatically for each pair</string>
@@ -915,7 +915,7 @@
     <string name="welcome_show_again" formatted="false">Show the welcome again</string>
     <string name="help_welcome_title" formatted="false">Welcome</string>
     <string name="help_welcome_body" formatted="false">The short setup shown on first run: turning Eigentone on, your headphones' correction, finding your sound, and how much of the app to show. Nothing you've set is lost by running it again.</string>
-    <string name="welcome_hands_where" formatted="false">You can change this any time: tap the gear at the top right, then Appearance, Advanced controls.</string>
+    <string name="welcome_hands_where" formatted="false">You can change this any time in Settings, under Appearance, Advanced controls.</string>
     <string name="tour_step_of" formatted="false">%1$d of %2$d</string>
     <string name="tour_next" formatted="false">Next</string>
     <string name="tour_done" formatted="false">Done</string>
@@ -923,15 +923,15 @@
     <string name="tour_power_title" formatted="false">Power and Bypass</string>
     <string name="tour_power_body" formatted="false">The switch turns Eigentone on and off. Bypass lets you hear the sound without it for a moment, at the same loudness, so the comparison is fair.</string>
     <string name="tour_presets_title" formatted="false">Your presets</string>
-    <string name="tour_presets_body" formatted="false">Tap the name to switch preset. The one in use, your favourites and your own come first.</string>
+    <string name="tour_presets_body" formatted="false">Click a preset to switch to it. The one in use, your favourites and your own come first.</string>
     <string name="tour_strip_title" formatted="false">What's on</string>
-    <string name="tour_strip_body" formatted="false">Shows what you're listening on and which effects are on. Tap it to see what each one is doing.</string>
+    <string name="tour_strip_body" formatted="false">Shows what you're listening on and which effects are on. Click it to see what each one is doing.</string>
     <string name="tour_faders_title" formatted="false">Shape the sound</string>
-    <string name="tour_faders_body" formatted="false">Drag a fader's cap to move it. Double tap one to return it to the preset's saved setting. The shapes below are good places to start.</string>
+    <string name="tour_faders_body" formatted="false">Drag a fader's cap to move it. Double-click one to return it to the preset's saved setting. The shapes below are good places to start.</string>
     <string name="tour_save_title" formatted="false">Keep or drop changes</string>
     <string name="tour_save_body" formatted="false">Once you change a preset, a bar at the bottom offers Save and Discard. Your edits are kept until then, even if you switch to another preset and back.</string>
     <string name="tour_tabs_title" formatted="false">Four tabs</string>
-    <string name="tour_tabs_body" formatted="false">Equaliser shapes the curve. Effects adds tone, space and more. Presets holds your sounds. The last tab is named after what's playing, such as Headphones or Phone, and fits your sound to it.</string>
+    <string name="tour_tabs_body" formatted="false">Tune shapes the curve and the effects. Presets holds your sounds. Devices fits your sound to what's playing, such as headphones or speakers.</string>
     <string name="tour_settings_title" formatted="false">Settings</string>
     <string name="tour_settings_body" formatted="false">Volume, the limiter and anything else that applies to every preset, plus Advanced controls. This tour is there too, under Help.</string>
     <string name="tour_offer_title" formatted="false">Find your way around</string>
@@ -956,7 +956,7 @@
     <string name="ui_console_copy" formatted="false">Copy</string>
     <string name="ui_console_share" formatted="false">Share</string>
     <string name="help_console_title" formatted="false">Debug console</string>
-    <string name="help_console_body" formatted="false">Shows what Eigentone is doing as it happens: which apps it attached to, what the phone accepted, and any errors. Eigentone shows its own messages; Everything adds Android's messages from inside Eigentone, such as the audio system's. Copy or share it with a bug report.</string>
+    <string name="help_console_body" formatted="false">Shows what Eigentone is doing as it happens: what it sent to the audio engine, what the engine accepted, and any errors. Copy or share it with a bug report.</string>
     <string name="ui_open_source" formatted="false">Open source</string>
     <string name="ui_open_source_body" formatted="false">Eigentone %1$s is free and open source under the GNU GPL v3. Anyone can read, change and share the code.</string>
     <string name="ui_view_source" formatted="false">View the source on GitHub</string>
@@ -1047,7 +1047,7 @@
     <string name="ui_device_discarded" formatted="false">Device settings put back as they were saved.</string>
     <string name="ui_device_saved" formatted="false">Device settings saved.</string>
     <string name="ui_theme_colour" formatted="false">Colour</string>
-    <string name="ui_colour_phone" formatted="false">Your phone's colours</string>
+    <string name="ui_colour_phone" formatted="false">Your PC's colours</string>
     <string name="ui_colour_blue" formatted="false">Blue</string>
     <string name="ui_colour_teal" formatted="false">Teal</string>
     <string name="ui_colour_green" formatted="false">Green</string>
@@ -1059,20 +1059,20 @@
     <string name="ui_colour_custom" formatted="false">Your own colour</string>
     <string name="ui_colour_hue" formatted="false">Hue</string>
     <string name="help_theme_colour_title" formatted="false">Colour</string>
-    <string name="help_theme_colour_body" formatted="false">The colour the app's Material You theme is made from. Your phone's colours follow your wallpaper, from Android 12. Otherwise pick a swatch, or the rainbow to choose any hue with the slider. The sound isn't affected.</string>
+    <string name="help_theme_colour_body" formatted="false">The colour of whatever is active: the curve, the selection and what's on. Windows accent uses the accent colour set in Windows. Otherwise pick a swatch, or the rainbow to choose any hue with the slider. The sound isn't affected.</string>
     <string name="ui_accessibility" formatted="false">Accessibility</string>
     <string name="ui_text_size" formatted="false">Text size</string>
     <string name="ui_text_size_phone" formatted="false">Default</string>
     <string name="ui_text_size_large" formatted="false">Large</string>
     <string name="ui_text_size_larger" formatted="false">Larger</string>
     <string name="help_text_size_title" formatted="false">Text size</string>
-    <string name="help_text_size_body" formatted="false">Makes the app's text larger than your phone's own text size, by about a seventh or a third. Your phone's font size setting still applies on top.</string>
+    <string name="help_text_size_body" formatted="false">Makes the app's text larger, by about a seventh or a third. Windows' own text size setting still applies on top.</string>
     <string name="ui_high_contrast" formatted="false">Higher contrast</string>
     <string name="help_high_contrast_title" formatted="false">Higher contrast</string>
     <string name="help_high_contrast_body" formatted="false">Draws grey text, outlines, dividers and slider tracks closer to the main text colour, so they're easier to make out.</string>
     <string name="ui_haptics" formatted="false">Vibration</string>
     <string name="help_haptics_title" formatted="false">Vibration</string>
-    <string name="help_haptics_body" formatted="false">A light tap when a slider or fader passes its default or reaches an end, and when you flip the power switch, Bypass or Save. Your phone's own touch feedback setting can also turn these off.</string>
+    <string name="help_haptics_body" formatted="false">A light click when a slider or fader passes its default or reaches an end, and when you flip the power switch, Bypass or Save. Your PC's own touch feedback setting can also turn these off.</string>
     <string name="ui_long_notices" formatted="false">Longer messages</string>
     <string name="help_long_notices_title" formatted="false">Longer messages</string>
     <string name="help_long_notices_body" formatted="false">Messages at the bottom of the screen, and the Undo they offer, stay twice as long before they go.</string>
@@ -1081,6 +1081,6 @@
     <string name="ui_eq_precision_standard" formatted="false">Standard</string>
     <string name="ui_eq_precision_fine" formatted="false">Fine</string>
     <string name="help_eq_precision_title" formatted="false">EQ precision</string>
-    <string name="help_eq_precision_body" formatted="false">How closely the sound follows your EQ curve. Standard uses 128 bands, which is plenty for headphone corrections, the graphic EQ and tone. Fine uses 256 bands, which follows narrow parametric filters about twice as closely, but every change to the whole sound, such as Bypass, comparisons and switching presets, takes about twice as long to apply. Changing it restarts the EQ, which can interrupt the sound for a moment. If the phone refuses Fine, Standard is used, and Status shows the bands in use.</string>
+    <string name="help_eq_precision_body" formatted="false">How closely the sound follows your EQ curve. Standard uses 128 bands, which is plenty for headphone corrections, the graphic EQ and tone. Fine uses 256 bands, which follows narrow parametric filters about twice as closely, but every change to the whole sound, such as Bypass, comparisons and switching presets, takes about twice as long to apply. Changing it restarts the EQ, which can interrupt the sound for a moment. If the PC refuses Fine, Standard is used, and Status shows the bands in use.</string>
     <string name="ui_dismiss" formatted="false">Dismiss</string>
 </resources>

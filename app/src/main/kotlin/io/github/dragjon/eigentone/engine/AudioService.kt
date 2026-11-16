@@ -197,14 +197,27 @@ object OutputDetector {
     /** The playing output's ID, as the service names engines. */
     fun playingGuid(): String? = playing?.get("guid")?.jsonPrimitive?.content
 
+    /** One connected output, for listing them all: what it is, Windows' name for it, and whether it's playing. */
+    class Listed(val info: OutputInfo, val name: String, val playing: Boolean)
+
+    /** Every connected output, the one playing first. */
+    val all = kotlinx.coroutines.flow.MutableStateFlow<List<Listed>>(emptyList())
+
     fun update(outputs: List<JsonObject>) {
         playing = outputs.firstOrNull { it["default"]?.jsonPrimitive?.booleanOrNull == true }
-        names.value = outputs.filter { it["active"]?.jsonPrimitive?.booleanOrNull == true }
-            .map { it["name"]?.jsonPrimitive?.content.orEmpty() }
+        val active = outputs.filter { it["active"]?.jsonPrimitive?.booleanOrNull == true }
+        names.value = active.map { it["name"]?.jsonPrimitive?.content.orEmpty() }
+        all.value = active
+            .map { o -> Listed(infoOf(o), o["name"]?.jsonPrimitive?.content.orEmpty(), o === playing) }
+            .sortedByDescending { it.playing }
     }
 
     fun current(@Suppress("UNUSED_PARAMETER") context: Context): Detected {
         val o = playing ?: return Detected(OutputInfo("speaker", "This PC"), 0)
+        return Detected(infoOf(o), 0)
+    }
+
+    private fun infoOf(o: JsonObject): OutputInfo {
         val name = o["name"]?.jsonPrimitive?.content.orEmpty()
         val device = o["device"]?.jsonPrimitive?.content.orEmpty()
         val bus = o["bus"]?.jsonPrimitive?.content.orEmpty()
@@ -223,6 +236,6 @@ object OutputDetector {
             "TV or monitor" -> OutputInfo("Display:$product", product, OutputKind.SPEAKER)
             else -> OutputInfo("$family:$product", product, OutputKind.SPEAKER)
         }
-        return Detected(info, 0)
+        return info
     }
 }
