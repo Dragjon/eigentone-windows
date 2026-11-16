@@ -54,6 +54,8 @@ private:
 
 int wmain(int argc, wchar_t** argv) {
     const wchar_t* path = argc > 1 ? argv[1] : L"EigentoneApo.dll";
+    // A private settings block, so the test never meets the settings of the plug-in that's really playing.
+    SetEnvironmentVariableW(L"EIGENTONE_SECTION", L"Local\\EigentoneHostTest");
     HMODULE dll = LoadLibraryW(path);
     check(dll != nullptr, "the DLL loads");
     if (!dll) return 1;

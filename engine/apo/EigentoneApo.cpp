@@ -38,7 +38,12 @@ SharedLink::SharedLink() {
     PSECURITY_DESCRIPTOR sd = nullptr;
     if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(kSectionSddl, SDDL_REVISION_1, &sd, nullptr)) return;
     SECURITY_ATTRIBUTES sa{sizeof(sa), sd, FALSE};
-    mapping_ = CreateFileMappingW(INVALID_HANDLE_VALUE, &sa, PAGE_READWRITE, 0, sizeof(SharedBlock), kSectionName);
+    // Tests load the plug-in in their own process and give it a private block, so they never read or
+    // change the settings of the plug-in that's really playing. Inside audiodg this is never set.
+    wchar_t name[128];
+    const DWORD custom = GetEnvironmentVariableW(L"EIGENTONE_SECTION", name, 128);
+    if (custom == 0 || custom >= 128) wcscpy_s(name, kSectionName);
+    mapping_ = CreateFileMappingW(INVALID_HANDLE_VALUE, &sa, PAGE_READWRITE, 0, sizeof(SharedBlock), name);
     const bool existed = GetLastError() == ERROR_ALREADY_EXISTS;
     LocalFree(sd);
     if (!mapping_) return;
@@ -347,6 +352,15 @@ STDMETHODIMP_(void) EigentoneApo::APOProcess(UINT32 numInputs, APO_CONNECTION_PR
     out->u32BufferFlags = BUFFER_VALID;
 
     if (slot_) {
+        // Keep the newest sound for the spectrum: plain stores into a ring, then the position.
+        LONG pos = slot_->scopePos;
+        const UINT32 pair = channels_ >= 2 ? 1 : 0;
+        for (UINT32 f = 0; f < frames; ++f, ++pos) {
+            const float* frame = dst + static_cast<size_t>(f) * channels_;
+            slot_->scope[static_cast<uint32_t>(pos) % kScopeFrames] = 0.5f * (frame[0] + frame[pair]);
+        }
+        MemoryBarrier();
+        slot_->scopePos = pos;
         slot_->peakIn = peakIn;
         slot_->peakOut = peakOut;
         slot_->frames = slot_->frames + frames;

@@ -36,7 +36,8 @@ flowchart LR
 | Part | Written in | What it does |
 |---|---|---|
 | **Plug-in** (`engine/apo`) | C++ | Processes the sound in real time inside Windows' audio engine |
-| **Setup tool** (`engine/setup`) | C++ | Hooks the plug-in into outputs and puts each one back exactly as it was |
+| **Service** (`engine/service`) | C++ | Starts with Windows, keeps the last settings, hooks new outputs, tells the app what's playing, and sends meters |
+| **Setup tool** (`engine/setup`) | C++ | Installs everything, and puts each output back exactly as it was |
 | **App** (`app`, coming) | Kotlin, Compose Multiplatform | The interface, shared in logic and design with the Android app |
 
 The full plan, and why each choice was made, is in [the plan](docs/PLAN.md).
@@ -54,11 +55,14 @@ ctest --test-dir build -C Release   # runs the plug-in outside the audio engine 
 To try it, run as administrator from `build\bin`:
 
 ```powershell
-.\eigentone-setup install      # hooks your default output
-.\eigentone-setup status       # shows whether the plug-in is processing
-.\eigentone-setup gain -6      # turns it down 6 dB, live
-.\eigentone-setup uninstall    # restores every output exactly as it was
+.\eigentone-setup install        # installs the plug-in and the service, and hooks your default output
+.\eigentone-setup status         # shows whether the plug-in is processing
+.\eigentone-setup devices        # every output, and what Eigentone takes it to be
+.\eigentone-setup set tone 6 0   # more bass, live (also: compressor, surround, reverb, limiter, on, off)
+.\eigentone-setup uninstall      # removes everything and restores every output exactly as it was
 ```
+
+The app talks to the service over `\\.\pipe\eigentone`, one JSON message per line: `hello`, `outputs`, `params`, `apply`, `status`, `meters`, `hook`, `unhook` and `restartAudio`.
 
 ## License
 

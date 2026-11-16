@@ -24,9 +24,11 @@ inline constexpr GUID kApoClsid = {0x92b47d94, 0x3398, 0x48ae, {0xb2, 0x91, 0x9a
 inline constexpr wchar_t kApoClsidText[] = L"{92B47D94-3398-48AE-B291-9A994AE356CB}";
 
 // The version is in the name, so a plug-in and a tool from different versions never read each other's layout.
-inline constexpr wchar_t kSectionName[] = L"Global\\EigentoneEngine.2";
+inline constexpr wchar_t kSectionName[] = L"Global\\EigentoneEngine.3";
 inline constexpr uint32_t kMagic = 0x45474E54;  // "EGNT"
-inline constexpr uint32_t kVersion = 2;
+inline constexpr uint32_t kVersion = 3;
+/// How much recent sound each output keeps for the spectrum: about 85 ms at 48 kHz.
+inline constexpr uint32_t kScopeFrames = 4096;
 inline constexpr uint32_t kMaxSlots = 8;
 
 /// One output's plug-in reports here. A plug-in claims a free slot when it starts processing.
@@ -42,6 +44,8 @@ struct alignas(64) EndpointSlot {
     volatile float peakIn;      // linear, the loudest sample of the last buffer before processing
     volatile float peakOut;     // and after
     wchar_t endpoint[64];       // the output's ID, for matching to a device in the app
+    volatile LONG scopePos;     // frames written to `scope` so far; the newest is at (scopePos - 1) % kScopeFrames
+    float scope[kScopeFrames];  // the processed sound, left and right averaged, for the spectrum
 };
 
 struct alignas(64) SharedBlock {
