@@ -107,24 +107,27 @@ private:
     std::vector<double> bandScratch_;  // kHop x channels x bands
     double bandEnv_[kMaxMbcBands] = {};
     float bandLin_[kMaxMbcBands] = {};
+    // Off and settled, the compressor steps out of the way entirely: its band filters keep the level flat
+    // but still shift the waveform. It crossfades out and back in, so switching never clicks.
+    float mbcBlend_ = 0;  // 1 when the sound goes through the bands
+    std::vector<std::vector<float>> mbcDry_;
 
     // Surround.
-    std::vector<float> virtDelay_[2];
+    // Surround: the two channels played from virtual speakers in front, as each ear would hear them.
+    std::vector<float> virtDelay_[2];   // each channel's recent past, for the delays to each ear
     size_t virtPos_ = 0;
-    BiquadState virtLp_[2];
+    BiquadState virtHead_[2][2];        // [speaker][ear]: the head's shading of that path
+    BiquadState virtRoom_[2];           // per ear: softening of the room's reflections
     float virtAmount_ = 0;
 
     // Reverb: a feedback delay network.
-    static constexpr int kLines = 8;
-    std::vector<float> preDelay_;
-    size_t preDelayPos_ = 0;
-    std::vector<float> diffuser_[2];
-    size_t diffuserPos_[2] = {};
-    std::vector<float> lines_[kLines];
-    size_t linePos_[kLines] = {};
-    float lineDamp_[kLines] = {};
-    BiquadState wetTone_[2];
+    struct ReverbState;
+    std::unique_ptr<ReverbState> reverb_;      // the reverb that plays
+    std::unique_ptr<ReverbState> reverbProbe_; // settings thread only: measures what a reverb adds
+    ReverbParams probedFor_{};
+    float probedTrim_ = 1;
     float reverbMix_ = 0;
+    float reverbTrim_ = 1;  // turns the whole sound down by what the echoes add, so loudness stays the same
     bool reverbClear_ = true;
 
     // Limiter: look-ahead, so it reaches the right level by the time a peak plays.

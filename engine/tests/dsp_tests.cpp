@@ -243,6 +243,33 @@ void testCompressor() {
     check(std::fabs(quietDb - (-60)) < 1.5, "expander: -50 dB below a -40 dB gate at 2:1 comes out near -60 dB", quietDb);
 }
 
+void testCompressorOff() {
+    // Switched off with its bands still set up, as the app leaves it: once settled, the sound is untouched.
+    Params p = neutralParams();
+    p.mbc.enabled = 1;
+    p.mbc.bandCount = 3;
+    p.mbc.bands[0] = {1, 200, 20, 300, 2, -20, 6, -70, 1, 0, 4};
+    p.mbc.bands[1] = {1, 2500, 10, 200, 2, -20, 6, -70, 1, 0, 4};
+    p.mbc.bands[2] = {1, 24000, 5, 150, 2, -20, 6, -70, 1, 0, 4};
+    Engine e;
+    e.prepare(kRate, 2);
+    e.update(p);
+    const auto in = sine(440, 0.5, 4.0);
+    std::vector<float> out(in.size());
+    const size_t half = in.size() / 4;
+    e.process(in.data(), out.data(), static_cast<uint32_t>(half));
+    p.mbc.enabled = 0;
+    e.update(p);
+    e.process(in.data() + half * 2, out.data() + half * 2, static_cast<uint32_t>(in.size() / 2 - half));
+    const size_t lat = e.latencyFrames();
+    double err = 0, jump = 0;
+    for (size_t i = static_cast<size_t>(kRate * 3) * 2; i < in.size(); ++i) err = std::max(err, static_cast<double>(std::fabs(out[i] - in[i - lat * 2])));
+    for (size_t i = 2; i < out.size(); i += 2) jump = std::max(jump, static_cast<double>(std::fabs(out[i] - out[i - 2])));
+    check(err < 1e-6, "compressor switched off steps out of the sound entirely", err);
+    const double limit = 0.5 * std::pow(10.0, 4.0 / 20) * 2 * kPi * 440 / kRate * 1.2;
+    check(jump < limit, "and switching it off doesn't click", jump / limit);
+}
+
 void testLimiter() {
     Params p = neutralParams();
     p.limiter = {1, 1.0f, 60.0f, 10.0f, -1.0f, 0.0f};
@@ -294,16 +321,132 @@ void testReverb() {
 }
 
 void testVirtualizer() {
+    // A left-only sound: in bass the head barely shades it, so the right ear hears it almost as loud; in
+    // treble the head is in the way, so the right ear hears much less. That difference is what places it.
     Params p = neutralParams();
     p.virtualizer = {1, 1.0f};
-    Engine e;
-    e.prepare(kRate, 2);
-    e.update(p);
-    auto in = sine(300, 0.25, 0.5);
-    for (size_t i = 1; i < in.size(); i += 2) in[i] = 0;  // left only
-    const auto out = run(e, in);
-    const double cross = rmsDb(out, 12000, 2, 1) - rmsDb(out, 12000, 2, 0);
-    check(cross > -12 && cross < -3, "surround: the right ear hears some of a left-only sound", cross);
+    double cross[2];
+    int k = 0;
+    for (double hz : {200.0, 6000.0}) {
+        Engine e;
+        e.prepare(kRate, 2);
+        e.update(p);
+        auto in = sine(hz, 0.25, 0.5);
+        for (size_t i = 1; i < in.size(); i += 2) in[i] = 0;
+        const auto out = run(e, in);
+        cross[k++] = rmsDb(out, 12000, 2, 1) - rmsDb(out, 12000, 2, 0);
+    }
+    check(cross[0] > -6 && cross[0] < 0, "surround: in bass, the far ear hears a left-only sound nearly as loud", cross[0]);
+    check(cross[1] < cross[0] - 6, "surround: in treble, the head shades the far ear", cross[1]);
+
+    p.virtualizer = {1, 0.0f};
+    Engine off;
+    off.prepare(kRate, 2);
+    off.update(p);
+    const auto in = sine(1000, 0.25, 0.2);
+    const auto out = run(off, in);
+    double err = 0;
+    for (size_t i = off.latencyFrames() * 2; i < in.size(); ++i) err = std::max(err, static_cast<double>(std::fabs(out[i] - in[i - off.latencyFrames() * 2])));
+    check(err < 1e-6, "surround at strength 0 changes nothing", err);
+}
+
+void testReverbKeepsLoudness() {
+    // The app's rooms at a moderate and at the full amount: on or off, the music is equally loud.
+    struct Room { const char* name; ReverbParams r; };
+    const Room rooms[] = {
+        {"room, -6 dB", {1, 0, -600, 1500, 0.83f, -1000, 10, -600, 20, 1, 1}},
+        {"hall, -6 dB", {1, 0, -600, 4000, 0.7f, -1000, 20, -600, 30, 1, 1}},
+        {"hall, full", {1, 0, -600, 4000, 0.7f, -1000, 20, 0, 30, 1, 1}},
+    };
+    for (const Room& room : rooms) {
+        Params p = neutralParams();
+        p.reverb = room.r;
+        Engine e;
+        e.prepare(kRate, 2);
+        e.update(p);
+        std::vector<float> in(static_cast<size_t>(kRate * 8) * 2);
+        std::mt19937 rng(6);
+        std::normal_distribution<float> g(0, 0.1f);
+        float a = 0, b = 0;
+        for (size_t i = 0; i < in.size(); i += 2) {
+            a = 0.9f * a + 0.1f * g(rng);
+            b = 0.9f * b + 0.1f * g(rng);
+            in[i] = 0.7f * a + 0.3f * b;
+            in[i + 1] = 0.7f * a - 0.3f * b;
+        }
+        const auto out = run(e, in);
+        const size_t from = static_cast<size_t>(kRate * 5);
+        const double change = (rmsDb(out, from, 2, 0) + rmsDb(out, from, 2, 1)) / 2 - (rmsDb(in, from, 2, 0) + rmsDb(in, from, 2, 1)) / 2;
+        char what[96];
+        std::snprintf(what, sizeof(what), "reverb keeps the loudness within 1 dB: %s", room.name);
+        check(std::fabs(change) < 1.0, what, change);
+    }
+}
+
+void testSurroundLevel() {
+    // Music is partly the same in both channels and partly different. With half of each, surround should
+    // keep the loudness, so switching it on doesn't sound like turning the volume down.
+    Params p = neutralParams();
+    p.virtualizer = {1, 1.0f};
+    for (double shared : {0.2, 0.5, 0.8}) {
+        Engine e;
+        e.prepare(kRate, 2);
+        e.update(p);
+        std::vector<float> in(static_cast<size_t>(kRate * 3) * 2);
+        std::mt19937 rng(5);
+        std::normal_distribution<float> g(0, 0.1f);
+        // Pink-ish: each source run through a gentle low-pass so treble doesn't dominate, as in music.
+        float a = 0, b = 0, c = 0;
+        for (size_t i = 0; i < in.size(); i += 2) {
+            a = 0.9f * a + 0.1f * g(rng);
+            b = 0.9f * b + 0.1f * g(rng);
+            c = 0.9f * c + 0.1f * g(rng);
+            in[i] = static_cast<float>(std::sqrt(shared) * a + std::sqrt(1 - shared) * b);
+            in[i + 1] = static_cast<float>(std::sqrt(shared) * a + std::sqrt(1 - shared) * c);
+        }
+        const auto out = run(e, in);
+        const double change = (rmsDb(out, 48000, 2, 0) + rmsDb(out, 48000, 2, 1)) / 2 - (rmsDb(in, 48000, 2, 0) + rmsDb(in, 48000, 2, 1)) / 2;
+        char what[96];
+        std::snprintf(what, sizeof(what), "surround keeps the loudness within 1 dB, %.0f%% shared between channels", shared * 100);
+        check(std::fabs(change) < 1.0, what, change);
+    }
+}
+
+void testReverbLevel() {
+    // At a reverb level of 0 mB the reverb is as loud as the music, whether the decay is short or long.
+    for (float decay : {1000.0f, 4000.0f}) {
+        Params p = neutralParams();
+        p.reverb = {1, 0, 0, decay, 1.0f, -10000, 0, 0, 0, 1, 1};
+        Engine e;
+        e.prepare(kRate, 2);
+        e.update(p);
+        std::vector<float> noise(static_cast<size_t>(kRate * 8) * 2);
+        std::mt19937 rng(4);
+        std::normal_distribution<float> g(0, 0.1f);
+        for (size_t i = 0; i < noise.size(); i += 2) noise[i] = noise[i + 1] = g(rng);
+        const auto out = run(e, noise);
+        const size_t lat = e.latencyFrames();
+        // The output is the music, turned down by the loudness trim, plus the echoes. Find how much of the
+        // music is in it, take that away, and what's left is the echoes.
+        double cross = 0, self = 0;
+        for (size_t i = static_cast<size_t>(kRate * 4); i < noise.size() / 2; ++i) {
+            const double d = noise[(i - lat) * 2];
+            cross += out[i * 2] * d;
+            self += d * d;
+        }
+        const double share = cross / self;
+        double wet = 0, dry = 0;
+        for (size_t i = static_cast<size_t>(kRate * 4); i < noise.size() / 2; ++i) {
+            const double d = share * noise[(i - lat) * 2];
+            const double w = out[i * 2] - d;
+            wet += w * w;
+            dry += d * d;
+        }
+        const double level = 10 * std::log10(wet / dry);
+        char what[96];
+        std::snprintf(what, sizeof(what), "reverb level 0 mB is as loud as the music (within 2 dB), %.0f s decay", decay / 1000);
+        check(std::fabs(level) < 2, what, level);
+    }
 }
 
 void testBypass() {
@@ -401,9 +544,13 @@ int main() {
     testSmoothSwitch();
     testCrossovers();
     testCompressor();
+    testCompressorOff();
     testLimiter();
     testReverb();
     testVirtualizer();
+    testReverbLevel();
+    testSurroundLevel();
+    testReverbKeepsLoudness();
     testBypass();
     testHandover();
     testSpeed();

@@ -542,19 +542,19 @@ int set(int argc, wchar_t** argv) {
         // A gentle three-band levelling style, as night mode might use.
         p.mbc.enabled = isOn(v);
         p.mbc.bandCount = 3;
-        p.mbc.bands[0] = {1, 200, 20, 300, 3, -30, 6, -70, 1, 0, 6};
-        p.mbc.bands[1] = {1, 2500, 10, 200, 3, -30, 6, -70, 1, 0, 6};
-        p.mbc.bands[2] = {1, 24000, 5, 150, 3, -30, 6, -70, 1, 0, 6};
+        p.mbc.bands[0] = {1, 200, 20, 300, 2, -20, 6, -70, 1, 0, 4};
+        p.mbc.bands[1] = {1, 2500, 10, 200, 2, -20, 6, -70, 1, 0, 4};
+        p.mbc.bands[2] = {1, 24000, 5, 150, 2, -20, 6, -70, 1, 0, 4};
     } else if (what == L"limiter") {
         p.limiter = {isOn(v) ? 1u : 0u, 1.0f, 60.0f, 10.0f, -1.0f, 0.0f};
     } else if (what == L"surround") {
         p.virtualizer = {_wtof(v) > 0 ? 1u : 0u, static_cast<float>(_wtof(v))};
     } else if (what == L"reverb") {
-        // Android's presets, in EnvironmentalReverb's units.
+        // The Android app's rooms (ReverbRoom), at a moderate amount: the reverb 6 dB below the music.
         const std::wstring kind = lower(v);
-        if (kind == L"room") p.reverb = {1, -1000, -600, 1100, 0.83f, -400, 5, 500, 10, 1, 1};
-        else if (kind == L"hall") p.reverb = {1, -1000, -600, 1800, 0.7f, -1300, 15, -800, 30, 1, 1};
-        else if (kind == L"plate") p.reverb = {1, -1000, -200, 1300, 0.9f, 0, 2, 0, 10, 0.75f, 1};
+        if (kind == L"room") p.reverb = {1, 0, -600, 1500, 0.83f, -1000, 10, -600, 20, 1, 1};
+        else if (kind == L"hall") p.reverb = {1, 0, -600, 4000, 0.7f, -1000, 20, -600, 30, 1, 1};
+        else if (kind == L"plate") p.reverb = {1, 0, -200, 2200, 0.9f, -1000, 5, -600, 10, 1, 0.75f};
         else p.reverb.enabled = 0;
     } else {
         return 2;

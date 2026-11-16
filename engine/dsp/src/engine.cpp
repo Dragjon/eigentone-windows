@@ -20,8 +20,34 @@ constexpr double kEarlyMs[kEarlyTaps] = {0.0, 3.1, 7.4, 11.9, 16.3, 21.7};
 constexpr double kEarlyGain[kEarlyTaps] = {0.9, 0.8, 0.7, 0.6, 0.5, 0.4};
 constexpr double kMaxPreDelayMs = 400.0;
 constexpr double kMaxDiffuserMs = 10.0;
-constexpr double kVirtDelayMs = 0.27;  // about the extra distance from a speaker to the far ear
-constexpr size_t kVirtRing = 256;
+// Surround, after Brown and Duda's spherical head model (1998): speakers at 30 degrees either side, a head of
+// 8.75 cm radius, and a few early reflections from a small room, which place the sound outside the head.
+constexpr double kSpeakerDeg = 30.0;
+constexpr double kHeadRadius = 0.0875;
+constexpr double kSpeedOfSound = 343.0;
+constexpr int kVirtReflections = 4;
+constexpr double kVirtReflectionMs[kVirtReflections] = {3.7, 6.1, 9.3, 13.9};
+constexpr float kVirtReflectionGain[kVirtReflections] = {0.35f, 0.28f, 0.22f, 0.17f};
+constexpr double kVirtRingMs = 25.0;
+constexpr float kVirtLevel = 0.665f;  // measured so music keeps its loudness with surround on (see the tests)
+
+/// How much a head shades sound arriving at an angle from an ear (0 = straight at it): a high shelf that
+/// lifts the near side a little and cuts the far side a lot. Brown and Duda's alpha, made digital.
+Biquad headShadow(double incidenceDeg, double rate) {
+    constexpr double alphaMin = 0.1, thetaMin = 150.0;
+    const double alpha = (1 + alphaMin / 2) + (1 - alphaMin / 2) * std::cos(incidenceDeg / thetaMin * std::numbers::pi);
+    const double tau = kHeadRadius / (2 * kSpeedOfSound);
+    const double k = 2 * rate;
+    const double a0 = 1 + tau * k;
+    return {(1 + alpha * tau * k) / a0, (1 - alpha * tau * k) / a0, 0, (1 - tau * k) / a0, 0};
+}
+
+/// How long sound from that angle takes to reach the ear, beyond reaching the head's centre, in seconds.
+double headDelay(double incidenceDeg) {
+    const double theta = incidenceDeg * std::numbers::pi / 180.0;
+    const double t = theta < std::numbers::pi / 2 ? -std::cos(theta) : theta - std::numbers::pi / 2;
+    return (kHeadRadius / kSpeedOfSound) * (1 + t);
+}
 constexpr double kButterworthQ = std::numbers::sqrt2 / 2;
 
 float dbToLin(double db) { return static_cast<float>(std::pow(10.0, db / 20.0)); }
@@ -90,10 +116,12 @@ struct Engine::Plan {
         double attack, release, thr, ratio, knee, gate, expander, pre, post;  // attack and release per hop
     } band[kMaxMbcBands] = {};
     double envDecay = 0;  // how fast a band's level reading falls back after a peak
+    double offGlide = 0;  // per hop, how fast a switched-off band returns to unity
 
     float virtAmount = 0;
-    Biquad virtLp;
-    size_t virtDelay = 1;
+    Biquad virtNear, virtFar, virtRoom;
+    float virtNearDelay = 0, virtFarDelay = 0;  // in samples, fractional
+    size_t virtReflection[kVirtReflections] = {};
 
     bool reverbOn = false;
     size_t lineLen[kLineCount] = {};
@@ -102,12 +130,89 @@ struct Engine::Plan {
     size_t earlyTap[kEarlyTaps] = {};
     float earlyGain[kEarlyTaps] = {};
     float lateGain = 0, roomGain = 0, wetHf = 1, diffusion = 0.5f;
+    float reverbTrim = 1;
     size_t diffLen[2] = {1, 1};
     Biquad wetLow;
 
     bool limOn = false;
     double limThrDb = -1, limThr = 1, limRatio = 10, limRelease = 0, limPost = 1;
     size_t limLen = 1;
+};
+
+/// The reverb's memory, and one step of it. Shared by the reverb that plays and the settings thread's
+/// measurement of how much it adds, so the two can't drift apart.
+struct Engine::ReverbState {
+    std::vector<float> preDelay;
+    size_t preDelayPos = 0;
+    std::vector<float> diffuser[2];
+    size_t diffuserPos[2] = {};
+    std::vector<float> lines[kLineCount];
+    size_t linePos[kLineCount] = {};
+    float lineDamp[kLineCount] = {};
+    BiquadState wetTone[2];
+
+    void allocate(double rate) {
+        preDelay.assign(static_cast<size_t>(kMaxPreDelayMs * 0.001 * rate) + 2, 0);
+        for (auto& d : diffuser) d.assign(static_cast<size_t>(kMaxDiffuserMs * 0.001 * rate) + 2, 0);
+        for (auto& l : lines) l.assign(static_cast<size_t>(kLineMs[kLineCount - 1] * 0.001 * rate) + 2, 0);
+        clear();
+    }
+
+    void clear() {
+        std::fill(preDelay.begin(), preDelay.end(), 0.0f);
+        for (auto& d : diffuser) std::fill(d.begin(), d.end(), 0.0f);
+        for (auto& l : lines) std::fill(l.begin(), l.end(), 0.0f);
+        std::fill(std::begin(lineDamp), std::end(lineDamp), 0.0f);
+        wetTone[0] = wetTone[1] = {};
+        preDelayPos = diffuserPos[0] = diffuserPos[1] = 0;
+        std::fill(std::begin(linePos), std::end(linePos), size_t{0});
+    }
+
+    /// Takes one sample of the mono mix and gives the echoes for the left and right ear, before the room level.
+    void tick(const Plan& plan, float mono, float wet[2]) {
+        const size_t preSize = preDelay.size();
+        preDelay[preDelayPos] = mono;
+
+        float early[2] = {0, 0};
+        for (int t = 0; t < kEarlyTaps; ++t) {
+            early[t & 1] += preDelay[(preDelayPos + preSize - plan.earlyTap[t]) % preSize] * plan.earlyGain[t];
+        }
+
+        // Two all-pass diffusers smear the input into a dense wash before the network.
+        float x = preDelay[(preDelayPos + preSize - plan.preDelay) % preSize];
+        for (int d = 0; d < 2; ++d) {
+            std::vector<float>& buf = diffuser[d];
+            size_t& p = diffuserPos[d];
+            const float v = buf[p];
+            const float y = -plan.diffusion * x + v;
+            buf[p] = x + plan.diffusion * y;
+            p = (p + 1) % plan.diffLen[d];
+            x = y;
+        }
+
+        float s[kLineCount];
+        float sum = 0;
+        for (int k = 0; k < kLineCount; ++k) {
+            s[k] = lines[k][linePos[k]];
+            sum += s[k];
+        }
+        const float house = sum * (2.0f / kLineCount);  // Householder feedback: lossless, and mixes every line
+        float late[2] = {0, 0};
+        for (int k = 0; k < kLineCount; ++k) {
+            late[k & 1] += s[k];
+            const float y = s[k] - house;
+            lineDamp[k] = plan.lineGain[k] * (1 - plan.lineB[k]) * y + plan.lineB[k] * lineDamp[k];
+            lines[k][linePos[k]] = lineDamp[k] + ((k & 1) ? -x : x);
+            if (++linePos[k] >= plan.lineLen[k]) linePos[k] = 0;
+        }
+
+        for (int side = 0; side < 2; ++side) {
+            const float w = early[side] + late[side] * plan.lateGain * 0.5f;
+            const float low = static_cast<float>(wetTone[side].process(plan.wetLow, w));
+            wet[side] = low + plan.wetHf * (w - low);
+        }
+        preDelayPos = (preDelayPos + 1) % preSize;
+    }
 };
 
 Engine::Engine() = default;
@@ -137,6 +242,7 @@ void Engine::prepare(double sampleRate, uint32_t channels) {
     work_ = planar(block_);
     dry_ = planar(block_);
     dryDelay_ = planar(lookahead_);
+    mbcDry_ = planar(block_);
     limDelay_ = planar(lookahead_);
 
     eq_.assign(channels_, {});
@@ -149,10 +255,13 @@ void Engine::prepare(double sampleRate, uint32_t channels) {
     mbc_.assign(channels_, {});
     bandScratch_.assign(kHop * channels_ * kMaxMbcBands, 0);
 
-    for (auto& v : virtDelay_) v.assign(kVirtRing, 0);
-    preDelay_.assign(static_cast<size_t>(kMaxPreDelayMs * 0.001 * rate_) + 2, 0);
-    for (auto& d : diffuser_) d.assign(static_cast<size_t>(kMaxDiffuserMs * 0.001 * rate_) + 2, 0);
-    for (auto& l : lines_) l.assign(static_cast<size_t>(kLineMs[kLineCount - 1] * 0.001 * rate_) + 2, 0);
+    for (auto& v : virtDelay_) v.assign(static_cast<size_t>(kVirtRingMs * 0.001 * rate_) + 4, 0);
+    reverb_ = std::make_unique<ReverbState>();
+    reverb_->allocate(rate_);
+    reverbProbe_ = std::make_unique<ReverbState>();
+    reverbProbe_->allocate(rate_);
+    probedFor_ = {};
+    probedTrim_ = 1;
 
     limHeldValue_.assign(lookahead_ + 2, 1.0f);
     limHeldIndex_.assign(lookahead_ + 2, 0);
@@ -178,8 +287,10 @@ void Engine::reset() {
     std::fill(std::begin(bandGainDb_), std::end(bandGainDb_), 0.0);
     std::fill(std::begin(bandEnv_), std::end(bandEnv_), 0.0);
     std::fill(std::begin(bandLin_), std::end(bandLin_), 1.0f);
+    mbcBlend_ = 0;
     for (auto& v : virtDelay_) std::fill(v.begin(), v.end(), 0.0f);
-    virtLp_[0] = virtLp_[1] = {};
+    for (auto& speaker : virtHead_) speaker[0] = speaker[1] = {};
+    virtRoom_[0] = virtRoom_[1] = {};
     virtPos_ = 0;
     reverbClear_ = true;
     limHeldFront_ = limHeldBack_ = 0;
@@ -195,6 +306,7 @@ void Engine::reset() {
         wetMix_ = current_->enabled;
         virtAmount_ = current_->virtAmount;
         reverbMix_ = current_->reverbOn ? 1.0f : 0.0f;
+        reverbTrim_ = current_->reverbTrim;
     }
 }
 
@@ -248,6 +360,7 @@ void Engine::build(Plan& plan, const Params& p) {
     // Compressor. Levels are read as peaks that fall back over 30 ms, so a band's reading holds steady
     // across a waveform's cycle instead of dipping at every zero crossing.
     plan.envDecay = timeCoef(30.0, rate_);
+    plan.offGlide = std::pow(timeCoef(30.0, rate_), static_cast<double>(kHop));
     plan.bands = std::min<size_t>(p.mbc.bandCount, kMaxMbcBands);
     plan.mbcOn = p.enabled && p.mbc.enabled && plan.bands > 0;
     double prev = 10.0;
@@ -271,9 +384,16 @@ void Engine::build(Plan& plan, const Params& p) {
     }
 
     // Surround
-    plan.virtAmount = p.enabled && p.virtualizer.enabled ? 0.6f * std::clamp(p.virtualizer.strength, 0.0f, 1.0f) : 0.0f;
-    plan.virtLp = Biquad::lowPass(700, kButterworthQ, rate_);
-    plan.virtDelay = std::clamp<size_t>(static_cast<size_t>(std::lround(kVirtDelayMs * 0.001 * rate_)), 1, kVirtRing - 1);
+    plan.virtAmount = p.enabled && p.virtualizer.enabled ? std::clamp(p.virtualizer.strength, 0.0f, 1.0f) : 0.0f;
+    // A speaker 30 degrees to one side reaches the near ear at 60 degrees from it, the far ear at 120.
+    plan.virtNear = headShadow(90 - kSpeakerDeg, rate_);
+    plan.virtFar = headShadow(90 + kSpeakerDeg, rate_);
+    plan.virtNearDelay = static_cast<float>(headDelay(90 - kSpeakerDeg) * rate_);
+    plan.virtFarDelay = static_cast<float>(headDelay(90 + kSpeakerDeg) * rate_);
+    plan.virtRoom = Biquad::lowPass(4000, kButterworthQ, rate_);
+    for (int i = 0; i < kVirtReflections; ++i) {
+        plan.virtReflection[i] = std::min(virtDelay_[0].size() - 2, static_cast<size_t>(kVirtReflectionMs[i] * 0.001 * rate_));
+    }
 
     // Reverb, after Jot: each line loses the same dB per second, and loses it faster at high frequencies.
     const ReverbParams& r = p.reverb;
@@ -283,7 +403,7 @@ void Engine::build(Plan& plan, const Params& p) {
     const double scale = 0.6 + 0.4 * std::clamp<double>(r.density, 0, 1);
     for (int i = 0; i < kLineCount; ++i) {
         const size_t len = std::max<size_t>(1, static_cast<size_t>(kLineMs[i] * scale * 0.001 * rate_));
-        plan.lineLen[i] = std::min(len, lines_[i].size() - 1);
+        plan.lineLen[i] = std::min(len, reverb_->lines[i].size() - 1);
         const double g = std::pow(10.0, -3.0 * static_cast<double>(len) / (rate_ * t60));
         const double gHf = std::pow(10.0, -3.0 * static_cast<double>(len) / (rate_ * t60 * hf));
         plan.lineGain[i] = static_cast<float>(g);
@@ -293,17 +413,49 @@ void Engine::build(Plan& plan, const Params& p) {
     const double preMs = std::clamp<double>(reflections + std::clamp<double>(r.reverbDelayMs, 0, 100), 0, kMaxPreDelayMs - 30);
     plan.preDelay = std::max<size_t>(1, static_cast<size_t>(preMs * 0.001 * rate_));
     for (int i = 0; i < kEarlyTaps; ++i) {
-        plan.earlyTap[i] = std::min(preDelay_.size() - 1,
+        plan.earlyTap[i] = std::min(reverb_->preDelay.size() - 1,
                                     static_cast<size_t>((reflections + kEarlyMs[i] * scale) * 0.001 * rate_) + 1);
         plan.earlyGain[i] = mbToLin(r.reflectionsLevelMb) * static_cast<float>(kEarlyGain[i]) * 0.5f;
     }
-    plan.lateGain = mbToLin(r.reverbLevelMb) * 0.35f;
+    // A network of lines that each lose g per pass holds about 1 / (1 - g^2) times the energy put in. Dividing
+    // that out makes a reverb level of 0 mB as loud as the music, however long the decay.
+    double held = 0;
+    for (int i = 0; i < kLineCount; ++i) held += 1.0 / (1.0 - static_cast<double>(plan.lineGain[i]) * plan.lineGain[i]);
+    held /= kLineCount;
+    plan.lateGain = mbToLin(r.reverbLevelMb) / static_cast<float>(std::sqrt(held));
     plan.roomGain = mbToLin(std::min(0.0f, r.roomLevelMb));
     plan.wetHf = mbToLin(std::min(0.0f, r.roomHfLevelMb));
     plan.wetLow = Biquad::lowPass(5000, kButterworthQ, rate_);
     plan.diffusion = static_cast<float>(0.3 + 0.4 * std::clamp<double>(r.diffusion, 0, 1));
-    plan.diffLen[0] = std::clamp<size_t>(static_cast<size_t>(4.7e-3 * rate_), 1, diffuser_[0].size() - 1);
-    plan.diffLen[1] = std::clamp<size_t>(static_cast<size_t>(3.3e-3 * rate_), 1, diffuser_[1].size() - 1);
+    plan.diffLen[0] = std::clamp<size_t>(static_cast<size_t>(4.7e-3 * rate_), 1, reverb_->diffuser[0].size() - 1);
+    plan.diffLen[1] = std::clamp<size_t>(static_cast<size_t>(3.3e-3 * rate_), 1, reverb_->diffuser[1].size() - 1);
+
+    // The echoes add energy on top of the music. Turning everything down by that much keeps switching the
+    // reverb on from sounding louder, and so better, than it is. How much they add depends on the room
+    // and on the music's balance, so it's measured: a burst of music-like sound (weighted towards bass,
+    // as most music is) is played through this very reverb, and its echoes' energy summed. Remembered
+    // per room, as the EQ changes far more often than the reverb.
+    plan.reverbTrim = 1;
+    if (plan.reverbOn) {
+        if (std::memcmp(&probedFor_, &r, sizeof(r)) != 0) {
+            ReverbState& probe = *reverbProbe_;
+            probe.clear();
+            const double pole = std::exp(-2 * std::numbers::pi * 800.0 / rate_);  // music's tilt, roughly
+            const size_t length = static_cast<size_t>(rate_ * std::clamp(t60 * 0.8, 0.5, 8.0));
+            double in = 1 - pole, dryEnergy = 0, wetEnergy = 0;
+            for (size_t n = 0; n < length; ++n) {
+                float wet[2];
+                probe.tick(plan, static_cast<float>(in), wet);
+                dryEnergy += in * in;
+                wetEnergy += 0.5 * (static_cast<double>(wet[0]) * wet[0] + static_cast<double>(wet[1]) * wet[1]);
+                in *= pole;
+            }
+            const double added = wetEnergy / dryEnergy * plan.roomGain * plan.roomGain;
+            probedTrim_ = static_cast<float>(1.0 / std::sqrt(1.0 + added));
+            probedFor_ = r;
+        }
+        plan.reverbTrim = probedTrim_;
+    }
 
     // Limiter
     plan.limOn = p.enabled && p.limiter.enabled;
@@ -430,10 +582,19 @@ void Engine::eqBlock(Plan* now, Plan* before) {
 
 void Engine::mbcBlock(const Plan& plan) {
     const size_t n = plan.bands;
-    if (n == 0) return;
     bool settled = !plan.mbcOn;
-    for (size_t b = 0; b < n && settled; ++b) settled = std::fabs(bandGainDb_[b]) < 1e-4;
-    if (settled && n == 1) return;  // nothing to split and nothing to change
+    for (size_t b = 0; b < n && settled; ++b) settled = std::fabs(bandGainDb_[b]) < 1e-3;
+    const float blendTarget = n > 0 && !settled ? 1.0f : 0.0f;
+    if (n == 0) mbcBlend_ = 0;  // no bands to fade from; the app steps band counts down gently
+    if (mbcBlend_ == 0 && blendTarget == 0) return;
+    if (mbcBlend_ == 0) {
+        // Starting afresh: clear what the filters and meters remember from last time.
+        for (auto& m : mbc_) m = MbcChannel{};
+        std::fill(std::begin(bandGainDb_), std::end(bandGainDb_), 0.0);
+        std::fill(std::begin(bandEnv_), std::end(bandEnv_), 0.0);
+        std::fill(std::begin(bandLin_), std::end(bandLin_), 1.0f);
+    }
+    for (uint32_t c = 0; c < channels_; ++c) std::copy(work_[c].begin(), work_[c].end(), mbcDry_[c].begin());
 
     const size_t stride = static_cast<size_t>(channels_) * kMaxMbcBands;
     for (size_t start = 0; start < block_; start += kHop) {
@@ -472,7 +633,9 @@ void Engine::mbcBlock(const Plan& plan) {
                 target = gainComputer(x, band.thr, band.ratio, band.knee, band.gate, band.expander) + band.pre + band.post;
             }
             double& g = bandGainDb_[b];
-            const double coef = target < g && plan.mbcOn && band.on ? band.attack : band.release;
+            // Switched off, a band glides back to unity quickly, rather than at the compressor's own release.
+            const bool working = plan.mbcOn && band.on;
+            const double coef = !working ? plan.offGlide : target < g ? band.attack : band.release;
             g = coef * g + (1 - coef) * target;
             from[b] = bandLin_[b];
             to[b] = std::fabs(g) < 1e-6 ? 1.0f : static_cast<float>(std::pow(10.0, g / 20.0));
@@ -488,6 +651,17 @@ void Engine::mbcBlock(const Plan& plan) {
             }
         }
     }
+    // Crossfade between the bands and the untouched sound over about 20 ms.
+    const float step = static_cast<float>(block_) / static_cast<float>(0.02 * rate_);
+    const float from = mbcBlend_;
+    const float to = blendTarget > from ? std::min(blendTarget, from + step) : std::max(blendTarget, from - step);
+    if (from != 1.0f || to != 1.0f) {
+        for (size_t i = 0; i < block_; ++i) {
+            const float w = from + (to - from) * (static_cast<float>(i) + 1) / static_cast<float>(block_);
+            for (uint32_t c = 0; c < channels_; ++c) work_[c][i] = mbcDry_[c][i] + w * (work_[c][i] - mbcDry_[c][i]);
+        }
+    }
+    mbcBlend_ = to;
 }
 
 void Engine::virtualizerBlock(const Plan& plan) {
@@ -496,88 +670,71 @@ void Engine::virtualizerBlock(const Plan& plan) {
     if (from == 0 && to == 0) return;
     if (from == 0) {
         for (auto& v : virtDelay_) std::fill(v.begin(), v.end(), 0.0f);
-        virtLp_[0] = virtLp_[1] = {};
+        for (auto& speaker : virtHead_) speaker[0] = speaker[1] = {};
+        virtRoom_[0] = virtRoom_[1] = {};
     }
+    const size_t size = virtDelay_[0].size();
+    // Reads a channel's past at a fractional delay, by straight-line interpolation.
+    auto past = [&](int ch, float delay) {
+        const float whole = std::floor(delay);
+        const float frac = delay - whole;
+        const size_t back = static_cast<size_t>(whole);
+        const float a = virtDelay_[ch][(virtPos_ + size - back) % size];
+        const float b = virtDelay_[ch][(virtPos_ + size - back - 1) % size];
+        return a + (b - a) * frac;
+    };
     for (size_t i = 0; i < block_; ++i) {
+        const float dryL = work_[0][i], dryR = work_[1][i];
+        virtDelay_[0][virtPos_] = dryL;
+        virtDelay_[1][virtPos_] = dryR;
+        float ear[2];
+        for (int e = 0; e < 2; ++e) {
+            const int nearSpeaker = e, farSpeaker = 1 - e;
+            const double direct = virtHead_[nearSpeaker][e].process(plan.virtNear, past(nearSpeaker, plan.virtNearDelay)) +
+                                  virtHead_[farSpeaker][e].process(plan.virtFar, past(farSpeaker, plan.virtFarDelay));
+            // Reflections arrive from both speakers, alternating which side they favour.
+            float room = 0;
+            for (int r = 0; r < kVirtReflections; ++r) {
+                const int source = (r & 1) ? farSpeaker : nearSpeaker;
+                room += virtDelay_[source][(virtPos_ + size - plan.virtReflection[r]) % size] * kVirtReflectionGain[r];
+            }
+            ear[e] = static_cast<float>(direct + virtRoom_[e].process(plan.virtRoom, room));
+        }
         const float k = from + (to - from) * fadeIn(i, block_);
-        const float l = work_[0][i], r = work_[1][i];
-        virtDelay_[0][virtPos_] = l;
-        virtDelay_[1][virtPos_] = r;
-        const size_t back = (virtPos_ + kVirtRing - plan.virtDelay) % kVirtRing;
-        const float toRight = static_cast<float>(virtLp_[0].process(plan.virtLp, virtDelay_[0][back]));
-        const float toLeft = static_cast<float>(virtLp_[1].process(plan.virtLp, virtDelay_[1][back]));
-        const float norm = 1.0f / (1.0f + 0.5f * k);
-        work_[0][i] = (l + k * toLeft) * norm;
-        work_[1][i] = (r + k * toRight) * norm;
-        virtPos_ = (virtPos_ + 1) % kVirtRing;
+        work_[0][i] = dryL + k * (ear[0] * kVirtLevel - dryL);
+        work_[1][i] = dryR + k * (ear[1] * kVirtLevel - dryR);
+        virtPos_ = (virtPos_ + 1) % size;
     }
     virtAmount_ = to;
 }
 
 void Engine::reverbBlock(const Plan& plan) {
     const float from = reverbMix_, to = plan.reverbOn ? 1.0f : 0.0f;
+    const float trimFrom = reverbTrim_;
     if (from == 0 && to == 0) {
         reverbClear_ = true;
+        reverbTrim_ = 1;
         return;
     }
     if (reverbClear_) {
-        std::fill(preDelay_.begin(), preDelay_.end(), 0.0f);
-        for (auto& d : diffuser_) std::fill(d.begin(), d.end(), 0.0f);
-        for (auto& l : lines_) std::fill(l.begin(), l.end(), 0.0f);
-        std::fill(std::begin(lineDamp_), std::end(lineDamp_), 0.0f);
-        wetTone_[0] = wetTone_[1] = {};
+        reverb_->clear();
         reverbClear_ = false;
     }
     const bool stereo = channels_ >= 2;
-    const size_t preSize = preDelay_.size();
     for (size_t i = 0; i < block_; ++i) {
         const float l = work_[0][i], r = stereo ? work_[1][i] : l;
-        preDelay_[preDelayPos_] = 0.5f * (l + r);
-
-        float early[2] = {0, 0};
-        for (int t = 0; t < kEarlyTaps; ++t) {
-            early[t & 1] += preDelay_[(preDelayPos_ + preSize - plan.earlyTap[t]) % preSize] * plan.earlyGain[t];
+        float wet[2];
+        reverb_->tick(plan, 0.5f * (l + r), wet);
+        const float fade = fadeIn(i, block_);
+        const float mix = (from + (to - from) * fade) * plan.roomGain;
+        const float trim = trimFrom + (plan.reverbTrim - trimFrom) * fade;
+        for (uint32_t c = 0; c < channels_; ++c) {
+            const float echo = c < 2 ? wet[stereo ? c : 0] * mix : 0.0f;
+            work_[c][i] = (work_[c][i] + echo) * trim;
         }
-
-        // Two all-pass diffusers smear the input into a dense wash before the network.
-        float x = preDelay_[(preDelayPos_ + preSize - plan.preDelay) % preSize];
-        for (int d = 0; d < 2; ++d) {
-            std::vector<float>& buf = diffuser_[d];
-            const size_t len = plan.diffLen[d];
-            size_t& p = diffuserPos_[d];
-            const float v = buf[p];
-            const float y = -plan.diffusion * x + v;
-            buf[p] = x + plan.diffusion * y;
-            p = (p + 1) % len;
-            x = y;
-        }
-
-        float s[kLineCount];
-        float sum = 0;
-        for (int k = 0; k < kLineCount; ++k) {
-            s[k] = lines_[k][linePos_[k]];
-            sum += s[k];
-        }
-        const float house = sum * (2.0f / kLineCount);  // Householder feedback: lossless, and mixes every line
-        float late[2] = {0, 0};
-        for (int k = 0; k < kLineCount; ++k) {
-            late[k & 1] += s[k];
-            const float y = s[k] - house;
-            lineDamp_[k] = plan.lineGain[k] * (1 - plan.lineB[k]) * y + plan.lineB[k] * lineDamp_[k];
-            lines_[k][linePos_[k]] = lineDamp_[k] + ((k & 1) ? -x : x);
-            if (++linePos_[k] >= plan.lineLen[k]) linePos_[k] = 0;
-        }
-
-        const float mix = (from + (to - from) * fadeIn(i, block_)) * plan.roomGain;
-        for (int side = 0; side < (stereo ? 2 : 1); ++side) {
-            const float wet = early[side] + late[side] * plan.lateGain * 0.5f;
-            const float low = static_cast<float>(wetTone_[side].process(plan.wetLow, wet));
-            const float shaped = low + plan.wetHf * (wet - low);
-            work_[side][i] += shaped * mix;
-        }
-        preDelayPos_ = (preDelayPos_ + 1) % preSize;
     }
     reverbMix_ = to;
+    reverbTrim_ = plan.reverbTrim;
 }
 
 void Engine::limiterBlock(const Plan& plan) {
