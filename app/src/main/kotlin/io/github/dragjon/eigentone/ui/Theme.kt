@@ -443,5 +443,16 @@ fun EigentoneTheme(dark: Boolean, seed: Long? = null, highContrast: Boolean = fa
     // Set before anything below reads it, so a change can't show one frame of the old theme.
     if (Palette.colors != colors) Palette.colors = colors
     Palette.dark = dark
-    MaterialTheme(colorScheme = scheme, typography = Type, shapes = Corners, content = content)
+    // Scrollbars in the panels' own greys, slim but plain to see, and brighter under the pointer.
+    val scrollbars = androidx.compose.foundation.ScrollbarStyle(
+        minimalHeight = 24.dp,
+        thickness = 6.dp,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(3.dp),
+        hoverDurationMillis = 200,
+        unhoverColor = colors.textDim.copy(alpha = 0.35f),
+        hoverColor = colors.textDim.copy(alpha = 0.75f),
+    )
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.LocalScrollbarStyle provides scrollbars) {
+        MaterialTheme(colorScheme = scheme, typography = Type, shapes = Corners, content = content)
+    }
 }

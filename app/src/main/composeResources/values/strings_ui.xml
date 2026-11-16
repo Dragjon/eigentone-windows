@@ -159,7 +159,7 @@
     <string name="help_shape_mode_title" formatted="false">Replace or Add</string>
     <string name="help_share_body" formatted="false">Creates a text code holding this whole sound, which you can send to someone. It contains EQ settings only, and nothing about you.</string>
     <string name="help_share_title" formatted="false">Share this sound</string>
-    <string name="help_start_on_boot_body" formatted="false">Turns the EQ back on when you sign in to Windows, if it was on before.</string>
+    <string name="help_start_on_boot_body" formatted="false">Opens Eigentone in the tray when you sign in to Windows, so the tray menu, quiet listening and automatic presets work from the start. The EQ itself keeps working without the app open.</string>
     <string name="help_start_on_boot_title" formatted="false">Start automatically</string>
     <string name="help_status_apps_body" formatted="false">The players Eigentone is processing in Per app mode.</string>
     <string name="help_status_apps_title" formatted="false">Attached apps</string>

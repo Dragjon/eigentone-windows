@@ -1,5 +1,12 @@
 package io.github.dragjon.eigentone.ui
 
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import org.jetbrains.compose.resources.*
 
 import androidx.compose.ui.layout.positionInRoot
@@ -219,7 +226,7 @@ fun SettingsSection(
                     .onSizeChanged { headingHeight = it.height.toFloat() }
                     .height(PANEL_HEADER_DP.dp)
                     .background(Palette.SurfaceHigh)
-                    .clickable(
+                    .handCursor().clickable(
                         interactionSource = press,
                         indication = null,
                         role = Role.Button,
@@ -388,7 +395,7 @@ fun TipOnTap(tip: Tip, modifier: Modifier = Modifier, content: @Composable () ->
     val about = stringResource(Res.string.ui_about_setting, stringResource(tip.title))
     TipHost(tip) { open ->
         androidx.compose.foundation.layout.Box(
-            modifier.clickable(onClickLabel = about, role = Role.Button, onClick = open),
+            modifier.handCursor().clickable(onClickLabel = about, role = Role.Button, onClick = open),
             contentAlignment = Alignment.Center,
         ) { content() }
     }
@@ -461,7 +468,7 @@ fun SwitchSetting(title: String, tip: Tip, checked: Boolean, detail: String? = n
         Modifier
             .fillMaxWidth()
             .heightIn(min = 30.dp)
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+            .handCursor().toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
             .padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -499,7 +506,7 @@ fun ActionRow(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 34.dp)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .handCursor().clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(start = 12.dp, end = 6.dp, top = 3.dp, bottom = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -541,7 +548,7 @@ fun DisclosureRow(label: String, open: Boolean, onToggle: () -> Unit) {
             .fillMaxWidth()
             .heightIn(min = 30.dp)
             .clip(KeyShape)
-            .clickable(
+            .handCursor().clickable(
                 role = Role.Button,
                 onClickLabel = stringResource(if (open) Res.string.ui_fold_close else Res.string.ui_fold_open),
             ) { onToggle() }
@@ -577,7 +584,7 @@ fun DropdownSetting(title: String, tip: Tip?, options: List<String>, selected: I
                     .height(24.dp)
                     .clip(RoundedCornerShape(3.dp))
                     .background(Palette.Background)
-                    .clickable(role = Role.DropdownList) { open = true }
+                    .handCursor().clickable(role = Role.DropdownList) { open = true }
                     .padding(start = 8.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -687,6 +694,7 @@ fun ValueTrack(
 
     Canvas(
         Modifier
+            .dragCursor(horizontal = true)
             .fillMaxWidth()
             .height(SLIDER_ROW_DP.dp)
             .semantics {
@@ -894,3 +902,87 @@ object Haptics {
         }
     }
 }
+
+/**
+ * A search box sized for a studio's panels: one 28 dp line, a small search icon, a hint that stays put
+ * rather than floating up as a label, and a clear key once there's something to clear. Recessed like the
+ * sliders' tracks, and outlined in the accent while typing.
+ */
+@Composable
+fun SearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    hint: String,
+    modifier: Modifier = Modifier,
+    onSearch: () -> Unit = {},
+) {
+    var focused by remember { mutableStateOf(false) }
+    androidx.compose.foundation.text.BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium.copy(color = Palette.Text),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(Palette.Lit),
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch() }),
+        modifier = modifier
+            .height(SEARCH_FIELD_DP.dp)
+            .onFocusChanged { focused = it.isFocused },
+        decorationBox = { field ->
+            Row(
+                Modifier
+                    .fillMaxSize()
+                    .clip(KeyShape)
+                    .background(Palette.Background)
+                    .border(1.dp, if (focused) Palette.Lit else Palette.Track, KeyShape)
+                    .padding(start = 8.dp, end = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    androidx.compose.material.icons.Icons.Filled.Search,
+                    contentDescription = null,
+                    tint = Palette.TextDim,
+                    modifier = Modifier.size(16.dp),
+                )
+                Box(Modifier.weight(1f).padding(horizontal = 6.dp), contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty()) {
+                        Text(hint, style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    field()
+                }
+                if (value.isNotEmpty()) {
+                    Box(
+                        Modifier
+                            .size(24.dp)
+                            .clip(KeyShape)
+                            .handCursor().clickable { onValueChange("") },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            androidx.compose.material.icons.Icons.Filled.Close,
+                            contentDescription = stringResource(Res.string.ui_clear_search),
+                            tint = Palette.TextDim,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                }
+            }
+        },
+    )
+}
+
+private const val SEARCH_FIELD_DP = 28
+
+/**
+ * The pointer says what a control does, as in other Windows apps: a hand over what can be clicked, a two-way
+ * arrow over what's dragged, a crosshair over the curve. Text boxes show the text cursor themselves.
+ */
+fun Modifier.handCursor(): Modifier = pointerHoverIcon(androidx.compose.ui.input.pointer.PointerIcon.Hand)
+
+fun Modifier.dragCursor(horizontal: Boolean): Modifier = pointerHoverIcon(
+    androidx.compose.ui.input.pointer.PointerIcon(
+        java.awt.Cursor(if (horizontal) java.awt.Cursor.E_RESIZE_CURSOR else java.awt.Cursor.N_RESIZE_CURSOR),
+    ),
+)
+
+fun Modifier.crossCursor(): Modifier = pointerHoverIcon(androidx.compose.ui.input.pointer.PointerIcon.Crosshair)

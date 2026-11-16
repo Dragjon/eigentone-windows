@@ -297,7 +297,7 @@ fun SideCard(label: String, selected: Boolean, musicActive: Boolean, modifier: M
             .background(if (selected) Palette.LitFill else Palette.Surface)
             .border(1.dp, if (selected) Palette.LitFill else Palette.Outline, PanelShape)
             .semantics { this.selected = selected }
-            .clickable(role = Role.RadioButton, onClickLabel = stringResource(Res.string.ui_play_version, label), onClick = onClick),
+            .handCursor().clickable(role = Role.RadioButton, onClickLabel = stringResource(Res.string.ui_play_version, label), onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {

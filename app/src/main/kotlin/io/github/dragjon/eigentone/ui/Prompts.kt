@@ -233,14 +233,13 @@ fun ShareRows(snack: (String) -> Unit) {
 }
 
 /** On Windows an app is known by its program's name, which is already readable. */
-fun appLabel(@Suppress("UNUSED_PARAMETER") context: Context, packageName: String): String = packageName
+fun appLabel(@Suppress("UNUSED_PARAMETER") context: Context, packageName: String): String =
+    io.github.dragjon.eigentone.engine.AppNames.of(packageName)
 
 /** Lets each music or video app have its own preset. Needs access that Android treats as sensitive. */
 @Composable
 fun PerAppSection(state: AppState) {
-    // Per-app presets need Windows to say which app is playing, which arrives in a later milestone. Until
-    // then the section stays out of the way rather than describing Android's notification access.
-    if (!MediaWatcher.isAllowed(LocalContext.current)) return
+    // Windows says which apps are playing without asking, so the Android permission row below never shows.
     val context = LocalContext.current
     var allowed by remember { mutableStateOf(MediaWatcher.isAllowed(context)) }
     LifecycleResumeEffect(Unit) {

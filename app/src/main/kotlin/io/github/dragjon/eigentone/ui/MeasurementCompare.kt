@@ -142,7 +142,7 @@ private fun Option(name: String, selected: Boolean, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .heightIn(min = 28.dp)
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
+            .handCursor().selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(selected = selected, onClick = null, modifier = Modifier.padding(8.dp))

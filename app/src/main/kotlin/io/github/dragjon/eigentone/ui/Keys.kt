@@ -139,7 +139,7 @@ fun SlidingToggle(
                         .fillMaxHeight()
                         .onGloballyPositioned { spans[i] = it.positionInParent().x to it.size.width.toFloat() }
                         .clip(ToggleThumbShape)
-                        .selectable(selected = on, role = Role.RadioButton, onClick = { onSelect(i) })
+                        .handCursor().selectable(selected = on, role = Role.RadioButton, onClick = { onSelect(i) })
                         .then(if (option.showLabel && option.description == null) Modifier else Modifier.semantics { contentDescription = option.description ?: option.label })
                         .padding(horizontal = if (option.showLabel) 8.dp else 0.dp),
                     horizontalArrangement = Arrangement.Center,
@@ -190,7 +190,7 @@ fun IconButton(
         modifier
             .size(ICON_BUTTON_DP.dp)
             .clip(RoundedCornerShape(3.dp))
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+            .handCursor().clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         androidx.compose.runtime.CompositionLocalProvider(
@@ -231,7 +231,7 @@ fun Button(
     val pressed by source.collectIsPressedAsState()
     androidx.compose.material3.Button(
         onClick = onClick,
-        modifier = modifier.height(BUTTON_DP.dp),
+        modifier = modifier.handCursor().height(BUTTON_DP.dp),
         enabled = enabled,
         shape = KeyShape,
         interactionSource = source,
@@ -259,7 +259,7 @@ fun FilledTonalButton(
     val pressed by source.collectIsPressedAsState()
     androidx.compose.material3.FilledTonalButton(
         onClick = onClick,
-        modifier = modifier.height(BUTTON_DP.dp),
+        modifier = modifier.handCursor().height(BUTTON_DP.dp),
         enabled = enabled,
         shape = KeyShape,
         interactionSource = source,
@@ -287,7 +287,7 @@ fun TextButton(
 ) {
     androidx.compose.material3.TextButton(
         onClick = onClick,
-        modifier = modifier.height(BUTTON_DP.dp),
+        modifier = modifier.handCursor().height(BUTTON_DP.dp),
         enabled = enabled,
         shape = KeyShape,
         contentPadding = StudioButtonPadding,
@@ -345,7 +345,7 @@ fun PresetSwitcher(
                 .heightIn(min = 28.dp)
                 // Smaller corners than a key, so the press highlight never clips the name at its edge.
                 .clip(RoundedCornerShape(8.dp))
-                .clickable(role = Role.DropdownList, onClickLabel = stringResource(Res.string.ui_change_preset)) { open = true },
+                .handCursor().clickable(role = Role.DropdownList, onClickLabel = stringResource(Res.string.ui_change_preset)) { open = true },
         ) {
             header()
             Row(verticalAlignment = Alignment.CenterVertically) {

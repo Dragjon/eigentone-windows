@@ -134,6 +134,7 @@ fun EqGraph(
 
     Canvas(
         modifier
+            .crossCursor()
             .fillMaxWidth()
             .then(if (height == null) Modifier.height(heightDp.dp) else Modifier.then(AnimatedHeight(height)))
             .semantics {

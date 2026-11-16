@@ -215,7 +215,7 @@ private fun PresetPicker(label: String, chosen: Preset, presets: List<Preset>, s
                 .fillMaxWidth()
                 .clip(PanelShape)
                 .background(Palette.SurfaceHigh)
-                .clickable(role = Role.DropdownList) { open = true }
+                .handCursor().clickable(role = Role.DropdownList) { open = true }
                 .heightIn(min = 32.dp)
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),

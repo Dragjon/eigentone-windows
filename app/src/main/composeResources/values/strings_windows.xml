@@ -55,4 +55,14 @@
     <string name="win_level_anyway">Start anyway</string>
     <string name="win_refine_apart">A and B differ by up to %1$s dB at some frequencies, at the same loudness.</string>
     <string name="win_refine_subtle">A and B differ by only %1$s dB at most, so they may sound the same. If they do, choose I can't hear a difference, which keeps your sound.</string>
+    <string name="win_tray_open">Open Eigentone</string>
+    <string name="win_tray_on">On</string>
+    <string name="win_tray_bypass">Bypass</string>
+    <string name="win_tray_presets">Presets</string>
+    <string name="win_tray_quit">Quit Eigentone</string>
+    <string name="win_tray_tooltip_on">Eigentone: %1$s</string>
+    <string name="win_tray_tooltip_bypass">Eigentone: %1$s, bypassed</string>
+    <string name="win_tray_tooltip_off">Eigentone: off</string>
+    <string name="win_tray_still_running">Eigentone is still running</string>
+    <string name="win_tray_still_running_body">It's in the tray, keeping your sound adjusted. Quit it from the tray icon's menu.</string>
 </resources>

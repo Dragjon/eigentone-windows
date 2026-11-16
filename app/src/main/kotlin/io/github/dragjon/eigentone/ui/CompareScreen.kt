@@ -229,7 +229,7 @@ private fun Choose(
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = 32.dp)
-                    .selectable(
+                    .handCursor().selectable(
                         selected = (if (choosingFirst) firstId else secondId) == id,
                         role = Role.RadioButton,
                         onClick = { onPick(id) },
@@ -262,7 +262,7 @@ private fun Slot(label: String, name: String, active: Boolean, modifier: Modifie
             .background(if (active) Palette.SurfaceHigh else Palette.Surface)
             // The slot being chosen for is outlined too, so it isn't told apart by tone alone.
             .border(1.dp, if (active) Palette.Lit else Palette.Line, PanelShape)
-            .selectable(selected = active, role = Role.Tab, onClick = onClick)
+            .handCursor().selectable(selected = active, role = Role.Tab, onClick = onClick)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {

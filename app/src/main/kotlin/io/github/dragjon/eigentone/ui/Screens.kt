@@ -610,7 +610,7 @@ private fun StudioTopBar(state: AppState, status: EngineStatus, module: Tab, goT
                     color = if (selected) Palette.Text else Palette.TextDim,
                     modifier = Modifier
                         .clip(RoundedCornerShape(3.dp))
-                        .selectable(selected = selected, role = Role.Tab) { goTo(t) }
+                        .handCursor().selectable(selected = selected, role = Role.Tab) { goTo(t) }
                         .padding(horizontal = 4.dp, vertical = 4.dp)
                         .semantics { if (t == Tab.HEADPHONES) contentDescription = name + ", " + output.label },
                 )
@@ -623,7 +623,7 @@ private fun StudioTopBar(state: AppState, status: EngineStatus, module: Tab, goT
 private val STUDIO_MODULES = listOf(Tab.EQ, Tab.PRESETS, Tab.HEADPHONES, Tab.TOOLS, Tab.SYSTEM)
 
 private fun Modifier.toggleableRow(value: Boolean, onChange: (Boolean) -> Unit): Modifier =
-    this.then(Modifier.toggleable(value = value, role = Role.Switch, onValueChange = onChange))
+    this.then(Modifier.handCursor().toggleable(value = value, role = Role.Switch, onValueChange = onChange))
 
 /** A column of panels down one side, as a studio's left and right panel tracks. */
 @Composable
@@ -647,39 +647,11 @@ private fun PanelTrack(width: androidx.compose.ui.unit.Dp, scroll: ScrollState, 
 private fun TuneWorkspace(state: AppState, scrolls: Map<Tab, ScrollState>) {
     val leftScroll = rememberScrollState()
     Row(Modifier.fillMaxSize()) {
-        // The presets take the height the history leaves, and scroll within it, so the track has no empty end.
-        // The presets take only the height they need (and scroll past it), and History the rest, so folding a
-        // preset group hands its room to History rather than leaving an empty panel behind.
-        CompositionLocalProvider(LocalPageWidth provides LEFT_PANEL_DP.dp) {
-            androidx.compose.ui.layout.SubcomposeLayout(Modifier.width(LEFT_PANEL_DP.dp).fillMaxHeight().background(Palette.Bar)) { c ->
-                val gap = PANEL_GAP_DP.dp.roundToPx()
-                val historyMin = History.HISTORY_MIN_DP.dp.roundToPx()
-                val loose = c.copy(minHeight = 0)
-                val presets = subcompose("presets") {
-                    Box(Modifier.fillMaxWidth()) {
-                        Column(Modifier.fillMaxWidth().verticalScroll(leftScroll), verticalArrangement = Arrangement.spacedBy(PANEL_GAP_DP.dp)) {
-                            PresetListSection(state)
-                        }
-                        if (leftScroll.maxValue > 0) {
-                            androidx.compose.foundation.VerticalScrollbar(
-                                adapter = androidx.compose.foundation.rememberScrollbarAdapter(leftScroll),
-                                modifier = Modifier.align(Alignment.CenterEnd).matchParentSize(),
-                            )
-                        }
-                    }
-                }.map { it.measure(loose.copy(maxHeight = (c.maxHeight - historyMin - gap).coerceAtLeast(0))) }
-                val top = presets.maxOfOrNull { it.height } ?: 0
-                val rest = (c.maxHeight - top - gap).coerceAtLeast(0)
-                val history = subcompose("history") {
-                    Box(Modifier.fillMaxSize().background(Palette.Surface)) {
-                        History.Panel(listMax = (rest.toDp() - History.HISTORY_CHROME_DP.dp).coerceAtLeast(40.dp))
-                    }
-                }.map { it.measure(c.copy(minHeight = rest, maxHeight = rest)) }
-                layout(c.maxWidth, c.maxHeight) {
-                    presets.forEach { it.place(0, 0) }
-                    history.forEach { it.place(0, top + gap) }
-                }
-            }
+        // One column of panels, as on the right: the presets, then History, scrolling together. History's own
+        // list stops growing at its cap and scrolls inside, so a long history doesn't push the presets away.
+        PanelTrack(LEFT_PANEL_DP.dp, leftScroll) {
+            PresetListSection(state)
+            History.Panel()
         }
         Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.Line))
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().background(Palette.Background)) {
@@ -871,7 +843,7 @@ private fun FilmCell(preset: Preset, width: androidx.compose.ui.unit.Dp, selecte
             .width(width)
             .fillMaxHeight()
             .clip(RoundedCornerShape(2.dp))
-            .clickable { Repo.loadPreset(preset) }
+            .handCursor().clickable { Repo.loadPreset(preset) }
             .background(if (selected) Palette.SurfaceHigh else Palette.Surface)
             .border(1.dp, if (selected) Palette.Lit else Color.Transparent, RoundedCornerShape(2.dp))
             .padding(6.dp),
@@ -1115,7 +1087,7 @@ private fun NavItem(tab: Tab, selected: Boolean, device: OutputKind? = null, mod
     val presses = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Column(
         modifier
-            .selectable(selected = selected, interactionSource = presses, indication = null, role = Role.Tab, onClick = onClick)
+            .handCursor().selectable(selected = selected, interactionSource = presses, indication = null, role = Role.Tab, onClick = onClick)
             .padding(vertical = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -1938,7 +1910,7 @@ private fun ColourSwatch(colour: Color, name: String, selected: Boolean, wallpap
         Modifier
             .size(30.dp)
             .clip(androidx.compose.foundation.shape.CircleShape)
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .handCursor().selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .semantics { contentDescription = name },
         contentAlignment = Alignment.Center,
     ) {
@@ -3156,7 +3128,8 @@ private fun HeadphonesTab(state: AppState) {
     val kind = output.kind
     val hasCorrection = preset.filters.any { it.gainDb != 0.0 || !it.type.hasGain } || preset.tone.importedCurve.isNotEmpty()
 
-    Row(Modifier.fullSpan().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Room below, so the heading stands apart from the first panel rather than resting on it.
+    Row(Modifier.fullSpan().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(painterResource(kind.icon()), contentDescription = null, tint = Palette.Lit, modifier = Modifier.padding(end = 12.dp).size(28.dp))
         Column {
             Text(output.label, style = MaterialTheme.typography.titleLarge, color = Palette.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -3387,17 +3360,11 @@ private fun PresetListSection(state: AppState) {
 
     // Only worth the space once there's a list to search.
     if (state.presets.size + general.size + headphones.size > SEARCH_FROM_PRESETS || query.isNotEmpty()) {
-        OutlinedTextField(
+        SearchField(
             value = query,
             onValueChange = { query = it },
-            singleLine = true,
-            label = { Text(stringResource(Res.string.ui_search_presets)) },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-            colors = fieldColors(unfocusedBorder = Palette.Track),
-            trailingIcon = if (query.isEmpty()) null else ({
-                IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.ui_clear_search)) }
-            }),
-            modifier = Modifier.fillMaxWidth(),
+            hint = stringResource(Res.string.ui_search_presets),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
         )
     }
 
@@ -3463,7 +3430,7 @@ private fun PresetRow(preset: Preset, selected: Boolean, edited: Boolean, favori
         Modifier
             .fillMaxWidth()
             .heightIn(min = 32.dp)
-            .clickable(role = Role.RadioButton) { Repo.loadPreset(preset) }
+            .handCursor().clickable(role = Role.RadioButton) { Repo.loadPreset(preset) }
             .padding(start = 16.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -3742,7 +3709,7 @@ fun AutoEqDialog(onDismiss: () -> Unit, onImported: (String) -> Unit) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 28.dp)
-                                .clickable(enabled = !busy, role = Role.Button) {
+                                .handCursor().clickable(enabled = !busy, role = Role.Button) {
                                     // Several measurements are worth hearing before choosing one.
                                     val same = AutoEqCatalog.measurementsOf(entries.orEmpty(), entry)
                                     if (same.size > 1) {
@@ -4157,7 +4124,7 @@ private object History {
                             Modifier
                                 .fillMaxWidth()
                                 .background(if (current) Palette.SurfaceHigh else Color.Transparent)
-                                .clickable { goTo(i) }
+                                .handCursor().clickable { goTo(i) }
                                 .padding(horizontal = 12.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -4317,7 +4284,7 @@ private fun ToolRow(entry: ToolEntry, selected: Boolean, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .background(if (selected) Palette.SurfaceHigh else Color.Transparent)
-            .clickable(onClick = onClick)
+            .handCursor().clickable(onClick = onClick)
             .padding(end = 12.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -4343,7 +4310,7 @@ private fun ToolOverview(onChoose: (ToolEntry) -> Unit) {
                             .fillMaxHeight()
                             .clip(PanelShape)
                             .background(Palette.Surface)
-                            .clickable { onChoose(entry) }
+                            .handCursor().clickable { onChoose(entry) }
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {

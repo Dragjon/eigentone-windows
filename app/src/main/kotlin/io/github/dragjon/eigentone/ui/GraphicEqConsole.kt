@@ -494,7 +494,7 @@ fun ShapesPanel(onBrowseShapes: () -> Unit) {
                     modifier = Modifier
                         .clip(RoundedCornerShape(3.dp))
                         .background(if (on) Palette.LitFill else Palette.Background)
-                        .clickable {
+                        .handCursor().clickable {
                             Repo.editTone { it.withShape(shape.name, shapeGains, bands) }
                             Repo.commit()
                         }
@@ -580,7 +580,7 @@ private fun Faders(
     val freqs = GraphicEq.frequencies(bands)
     val density = LocalDensity.current
 
-    BoxWithConstraints(area.fillMaxWidth().padding(horizontal = 12.dp)) {
+    BoxWithConstraints(area.dragCursor(horizontal = false).fillMaxWidth().padding(horizontal = 12.dp)) {
         // Precision gives every fader a finger's width and scrolls sideways when they don't all fit.
         val wide = DB_GUTTER_DP.dp + PRECISION_SLOT_DP.dp * bands
         val scrolling = scrollable && wide > maxWidth

@@ -389,7 +389,7 @@ private fun StepDots(step: Int, modifier: Modifier, onStart: () -> Unit) {
                 .then(
                     if (last) {
                         Modifier
-                            .clickable(role = Role.Button, onClick = onStart)
+                            .handCursor().clickable(role = Role.Button, onClick = onStart)
                             .semantics { contentDescription = startLabel }
                     } else {
                         Modifier
@@ -582,7 +582,7 @@ private fun Choice(title: String, body: String, selected: Boolean, onSelect: () 
             .clip(PanelShape)
             .background(if (selected) Palette.SurfaceHigh else Palette.Surface)
             .border(if (selected) 2.dp else 1.dp, if (selected) Palette.Lit else Palette.Line, PanelShape)
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
+            .handCursor().selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {

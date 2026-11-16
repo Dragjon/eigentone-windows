@@ -17,6 +17,7 @@
 #include <shlobj.h>
 #include <knownfolders.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <complex>

@@ -165,7 +165,7 @@ fun LiveStrip(state: AppState, showCurve: Boolean) {
                 if (grow.value == 0f) closedHeight[0] = placeable.height
                 layout(placeable.width, placeable.height) { placeable.place(0, 0) }
             }
-            .clickable(
+            .handCursor().clickable(
                 role = Role.Button,
                 onClickLabel = stringResource(if (expanded) Res.string.ui_strip_hide else Res.string.ui_strip_show),
             ) { StripDrawer.open = !expanded }
@@ -421,7 +421,7 @@ private fun androidx.compose.animation.AnimatedVisibilityScope.StripDetails(
                         exit = slideOutVertically(tween(STRIP_MS, easing = LinearOutSlowInEasing)) { -it / 2 } + fadeOut(tween(STRIP_MS / 2)),
                     )
                     .clip(KeyShape)
-                    .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.ui_strip_open_setting)) { onOpen(effect.name) }
+                    .handCursor().clickable(role = Role.Button, onClickLabel = stringResource(Res.string.ui_strip_open_setting)) { onOpen(effect.name) }
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

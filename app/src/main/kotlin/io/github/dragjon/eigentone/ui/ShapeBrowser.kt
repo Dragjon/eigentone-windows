@@ -248,22 +248,12 @@ fun ShapeBrowser(onClose: () -> Unit) {
         val previewOnly = picked != null && windowHeightDp < SHORT_SCREEN_DP
 
         if (!previewOnly) {
-            OutlinedTextField(colors = fieldColors(), 
+            SearchField(
                 value = query,
                 onValueChange = { query = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                placeholder = { Text(stringResource(Res.string.ui_rock_muddy_podcast_bass_100), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Clear, contentDescription = stringResource(Res.string.ui_clear_search)) }
-                    }
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
+                hint = stringResource(Res.string.ui_rock_muddy_podcast_bass_100),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                onSearch = { focus.clearFocus() },
             )
 
             if (onFirstPage) {
@@ -535,7 +525,7 @@ private fun BrowseCard(option: BrowseOption, modifier: Modifier) {
         modifier
             .clip(PanelShape)
             .background(Palette.Surface)
-            .clickable(role = Role.Button, onClick = option.onClick)
+            .handCursor().clickable(role = Role.Button, onClick = option.onClick)
             .heightIn(min = 88.dp)
             .padding(12.dp),
     ) {
@@ -618,7 +608,7 @@ private fun ShapeRow(
             .fillMaxWidth()
             .background(if (selected) Palette.SurfaceHigh else Palette.Background)
             .semantics { this.selected = selected }
-            .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.ui_hear, shape.name), onClick = onClick)
+            .handCursor().clickable(role = Role.Button, onClickLabel = stringResource(Res.string.ui_hear, shape.name), onClick = onClick)
             .heightIn(min = 32.dp)
             .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

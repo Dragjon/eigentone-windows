@@ -52,6 +52,11 @@ add_executable(eigentone-service service/main.cpp)
 target_link_libraries(eigentone-service PRIVATE eigentone-service-core eigentone-system)
 set_target_properties(eigentone-service PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin)
 
+# The agent, which the app runs in the user's session to see which apps are playing.
+add_executable(eigentone-agent agent/main.cpp)
+target_link_libraries(eigentone-agent PRIVATE nlohmann_json::nlohmann_json ole32 version)
+set_target_properties(eigentone-agent PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin)
+
 add_executable(service-tests tests/service_tests.cpp)
 target_link_libraries(service-tests PRIVATE eigentone-service-core eigentone-system)
 set_target_properties(service-tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin)

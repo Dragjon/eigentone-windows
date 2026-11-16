@@ -126,6 +126,8 @@ object AudioService {
                 )
             }
         }
+        // The apps playing, for per-app presets, from the agent in this session.
+        AppWatcher.start()
         scope.launch {
             // Windows' volume for the playing output, for quiet listening, as Android reads the phone's volume.
             // Muted keeps the last reading, so unmuting doesn't jump.

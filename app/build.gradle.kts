@@ -47,6 +47,17 @@ compose.desktop {
             packageVersion = "0.1.0"
             vendor = "Dragjon"
             licenseFile.set(rootProject.file("LICENSE"))
+            // Files that ship beside the app, such as the agent below, found at run time through the
+            // compose.application.resources.dir property.
+            appResourcesRootDir.set(layout.buildDirectory.dir("app-resources"))
         }
     }
 }
+
+// The agent lists the apps playing, for per-app presets. It's built with the engine (CMake) and ships with the
+// app, so it runs in the user's session, where Windows keeps its audio sessions.
+val copyAgent by tasks.registering(Copy::class) {
+    from(rootProject.file("build/bin/eigentone-agent.exe"))
+    into(layout.buildDirectory.dir("app-resources/windows"))
+}
+tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(copyAgent) }

@@ -8,13 +8,16 @@ import io.github.dragjon.eigentone.platform.Context
  * Each says what replaces it.
  */
 
-/** Android reads the playing app from media notifications. On Windows, per-app presets come in M6. */
+/**
+ * Android reads the playing app from media notifications, which needs the user's permission. On Windows the
+ * service lists the apps playing on the output (see AudioService), which needs none.
+ */
 class MediaWatcher(@Suppress("UNUSED_PARAMETER") context: Context, @Suppress("UNUSED_PARAMETER") onApp: (String?) -> Unit) {
     fun attachIfAllowed() = Unit
     fun release() = Unit
 
     companion object {
-        fun isAllowed(@Suppress("UNUSED_PARAMETER") context: Context): Boolean = false
+        fun isAllowed(@Suppress("UNUSED_PARAMETER") context: Context): Boolean = true
     }
 }
 
