@@ -22,6 +22,9 @@ PNG = ROOT / "app/src/main/composeResources/drawable/app_icon.png"
 # The window and tray take a single image and Windows shrinks it to the taskbar's size, so they get the small,
 # bold drawing.
 SMALL_PNG = ROOT / "app/src/main/composeResources/drawable/app_icon_small.png"
+# The tray icon at each size Windows uses for it, from 100% to 300% display scaling, so it's never stretched.
+TRAY = ROOT / "app/src/main/resources/tray"
+TRAY_SIZES = (16, 20, 24, 32, 40, 48)
 
 MARGIN = 0.07  # of the side, kept clear for the round ends and the shadow
 GAP = "#FFFFFF"  # the logo's colour for the gaps between strands
@@ -64,7 +67,7 @@ def strokes():
     return viewport, lines
 
 
-def draw(size: int) -> Image.Image:
+def draw(size: int, depth: bool = True) -> Image.Image:
     viewport, lines = strokes()
     small = size <= SMALL
     if small:
@@ -104,6 +107,9 @@ def draw(size: int) -> Image.Image:
             if pixels[x, y] == (1, 2, 3, 255):
                 t = ((CANVAS - x) + y) / (2 * CANVAS)
                 pixels[x, y] = tuple(round(a + (b - a) * t) for a, b in zip(GRADIENT_FROM, GRADIENT_TO)) + (255,)
+    if not depth:
+        # The tray: only the bright strands, sharp at a few pixels, with no rim or shadow to muddy them.
+        return image.resize((size, size), Image.LANCZOS)
     # The rim: the logo's shape grown by a little, in the deep colour, under the logo.
     alpha = image.getchannel("A")
     grow = int(CANVAS * RIM) | 1
@@ -129,6 +135,9 @@ def main():
     images[-1].save(ICO, sizes=[(s, s) for s in sizes], append_images=images[:-1])
     draw(256).save(PNG)
     draw(SMALL).save(SMALL_PNG)
+    TRAY.mkdir(parents=True, exist_ok=True)
+    for s in TRAY_SIZES:
+        draw(s, depth=False).save(TRAY / f"{s}.png")
     print("wrote", ICO.relative_to(ROOT), "and", PNG.relative_to(ROOT))
 
 

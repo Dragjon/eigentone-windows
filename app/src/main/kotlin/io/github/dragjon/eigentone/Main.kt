@@ -90,12 +90,39 @@ fun main(args: Array<String>) {
             raised++
         }
         remember { SingleInstance.listen { javax.swing.SwingUtilities.invokeLater { show() } } }
-        val tray = rememberTrayState()
         var toldAboutTray by remember { mutableStateOf(false) }
         val stillRunningTitle = stringResource(Res.string.win_tray_still_running)
         val stillRunningBody = stringResource(Res.string.win_tray_still_running_body)
-
-        EigentoneTray(tray, onOpen = ::show, onQuit = ::exitApplication)
+        fun quit() {
+            io.github.dragjon.eigentone.platform.AppTray.remove()
+            exitApplication()
+        }
+        val words = io.github.dragjon.eigentone.platform.AppTray.Words(
+            open = stringResource(Res.string.win_tray_open),
+            on = stringResource(Res.string.win_tray_on),
+            bypass = stringResource(Res.string.win_tray_bypass),
+            presets = stringResource(Res.string.win_tray_presets),
+            quit = stringResource(Res.string.win_tray_quit),
+            tooltipOn = { name -> io.github.dragjon.eigentone.ui.appText(Res.string.win_tray_tooltip_on, name) },
+            tooltipBypass = { name -> io.github.dragjon.eigentone.ui.appText(Res.string.win_tray_tooltip_bypass, name) },
+            tooltipOff = stringResource(Res.string.win_tray_tooltip_off),
+        )
+        // Where the tray's flyout opens, while it's open: by the pointer, just above the taskbar.
+        // EIGENTONE_FLYOUT opens it at start, by the clock, for looking at it without the tray.
+        var flyoutAt by remember { mutableStateOf<java.awt.Point?>(null) }
+        if (System.getenv("EIGENTONE_FLYOUT") != null) {
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(FLYOUT_TEST_DELAY_MS)
+                val s = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
+                flyoutAt = java.awt.Point(s.x + s.width - 40, s.y + s.height)
+            }
+        }
+        LaunchedEffect(Unit) {
+            javax.swing.SwingUtilities.invokeLater {
+                io.github.dragjon.eigentone.platform.AppTray.install(words, onOpen = { show() }, onMenu = { at -> flyoutAt = if (flyoutAt == null) at else null })
+            }
+        }
+        flyoutAt?.let { at -> TrayFlyoutWindow(at, onOpen = ::show, onQuit = ::quit, onClose = { flyoutAt = null }) }
 
         Window(
             // Closing the window leaves Eigentone in the tray, where quiet listening and the tray menu keep
@@ -104,7 +131,7 @@ fun main(args: Array<String>) {
                 visible = false
                 if (!toldAboutTray) {
                     toldAboutTray = true
-                    tray.sendNotification(Notification(stillRunningTitle, stillRunningBody, Notification.Type.Info))
+                    io.github.dragjon.eigentone.platform.AppTray.notify(stillRunningTitle, stillRunningBody)
                 }
             },
             visible = visible,
@@ -143,50 +170,6 @@ fun main(args: Array<String>) {
     }
 }
 
-/**
- * The tray icon, which does what Android's Quick Settings tile does and more: on and off, Bypass and the
- * presets, without opening the window. Clicking the icon opens it. The tooltip says what Eigentone is doing.
- */
-@Composable
-private fun ApplicationScope.EigentoneTray(state: TrayState, onOpen: () -> Unit, onQuit: () -> Unit) {
-    val app by Repo.state.collectAsState()
-    val names by io.github.dragjon.eigentone.engine.OutputDetector.names.collectAsState()
-    val presets = remember(app.presets, app.favorites, names) {
-        (BuiltIns.availableFor(names) + app.presets)
-            .sortedByDescending { it.id in app.favorites }
-            .take(TRAY_PRESETS)
-    }
-    Tray(
-        icon = painterResource(Res.drawable.app_icon_small),
-        state = state,
-        tooltip = if (app.enabled) {
-            stringResource(if (app.bypass) Res.string.win_tray_tooltip_bypass else Res.string.win_tray_tooltip_on, app.current.name)
-        } else {
-            stringResource(Res.string.win_tray_tooltip_off)
-        },
-        onAction = onOpen,
-        menu = {
-            Item(stringResource(Res.string.win_tray_open), onClick = onOpen)
-            Separator()
-            CheckboxItem(stringResource(Res.string.win_tray_on), checked = app.enabled) { on ->
-                Repo.update { it.copy(enabled = on) }
-                if (on) AudioService.start()
-            }
-            CheckboxItem(stringResource(Res.string.win_tray_bypass), checked = app.bypass, enabled = app.enabled) { on ->
-                Repo.update { it.copy(bypass = on) }
-            }
-            Menu(stringResource(Res.string.win_tray_presets)) {
-                presets.forEach { preset ->
-                    // The tray's menu is Windows' own, which has ticks but no radio buttons.
-                    CheckboxItem(preset.name, checked = preset.id == app.current.id) { Repo.loadPreset(preset) }
-                }
-            }
-            Separator()
-            Item(stringResource(Res.string.win_tray_quit), onClick = onQuit)
-        },
-    )
-}
-
 /** Back through favourites, or every preset when there are none: Repo.nextPreset the other way. */
 private fun previousPreset() {
     if (Repo.toolBusy) return
@@ -197,8 +180,7 @@ private fun previousPreset() {
     Repo.loadPreset(cycle[(if (index < 0) 0 else index - 1 + cycle.size) % cycle.size])
 }
 
-/** The presets the tray lists, favourites first: enough to choose from, few enough to fit a menu. */
-private const val TRAY_PRESETS = 15
+
 
 /** Most of the screen, so the pages have room for their columns, without covering it all. */
 private fun startSize(): DpSize {
@@ -209,3 +191,57 @@ private fun startSize(): DpSize {
 
 private const val MIN_WIDTH = 640
 private const val MIN_HEIGHT = 520
+
+/**
+ * The tray's flyout, in a borderless window of its own that floats above everything, placed so its corner sits
+ * by the pointer and it stays on screen above the taskbar. Clicking anywhere else closes it.
+ */
+@Composable
+private fun TrayFlyoutWindow(at: java.awt.Point, onOpen: () -> Unit, onQuit: () -> Unit, onClose: () -> Unit) {
+    val shadow = io.github.dragjon.eigentone.ui.TRAY_FLYOUT_SHADOW_DP
+    val width = io.github.dragjon.eigentone.ui.TRAY_FLYOUT_WIDTH_DP + shadow * 2
+    val height = io.github.dragjon.eigentone.ui.TRAY_FLYOUT_HEIGHT_DP + shadow * 2
+    // Java gives the screen and pointer in the same scaled units as dp.
+    val screen = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
+    val x = (at.x - width + shadow).coerceIn(screen.x, screen.x + screen.width - width)
+    val y = (minOf(at.y, screen.y + screen.height) - height + shadow).coerceIn(screen.y, screen.y + screen.height - height)
+    androidx.compose.runtime.key(at) {
+        Window(
+            onCloseRequest = onClose,
+            title = "Eigentone menu",
+            undecorated = true,
+            transparent = true,
+            // Never the active window, as Windows' own menus aren't, so the tray's overflow it opened from stays
+            // open behind it. Its buttons still work.
+            focusable = false,
+            resizable = false,
+            alwaysOnTop = true,
+            state = rememberWindowState(
+                size = DpSize(width.dp, height.dp),
+                position = androidx.compose.ui.window.WindowPosition(x.dp, y.dp),
+            ),
+        ) {
+            LaunchedEffect(Unit) {
+                window.toFront()
+                // It never has the focus to lose, so it closes when the active window changes instead: a click
+                // anywhere else, or the overflow closing.
+                val user32 = com.sun.jna.platform.win32.User32.INSTANCE
+                val opener = user32.GetForegroundWindow()
+                while (true) {
+                    kotlinx.coroutines.delay(FLYOUT_WATCH_MS)
+                    if (user32.GetForegroundWindow() != opener) {
+                        onClose()
+                        break
+                    }
+                }
+            }
+            io.github.dragjon.eigentone.ui.TrayFlyout(onOpen = onOpen, onQuit = onQuit, onClose = onClose)
+        }
+    }
+}
+
+/** How long after starting EIGENTONE_FLYOUT waits, so the window has opened and settled first. */
+private const val FLYOUT_TEST_DELAY_MS = 6000L
+
+/** How often the flyout checks whether something else has become the active window. */
+private const val FLYOUT_WATCH_MS = 150L
