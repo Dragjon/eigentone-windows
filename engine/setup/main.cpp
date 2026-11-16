@@ -352,24 +352,59 @@ bool waitFor(SC_HANDLE svc, DWORD state) {
     return false;
 }
 
+/// Services that need Windows Audio and were running when it was stopped, to start again afterwards.
+/// Windows won't stop Audiosrv while any of them run (a laptop maker's hotkey service, for example).
+std::vector<std::wstring> gStoppedDependents;
+
+bool stopService(SC_HANDLE scm, const wchar_t* name) {
+    SC_HANDLE svc = OpenServiceW(scm, name, SERVICE_STOP | SERVICE_QUERY_STATUS);
+    if (!svc) return fail(name, static_cast<LONG>(GetLastError())), false;
+    SERVICE_STATUS st{};
+    bool ok = ControlService(svc, SERVICE_CONTROL_STOP, &st) || GetLastError() == ERROR_SERVICE_NOT_ACTIVE;
+    if (!ok) fail(name, static_cast<LONG>(GetLastError()));
+    ok = ok && waitFor(svc, SERVICE_STOPPED);
+    CloseServiceHandle(svc);
+    return ok;
+}
+
+bool startService(SC_HANDLE scm, const wchar_t* name) {
+    SC_HANDLE svc = OpenServiceW(scm, name, SERVICE_START | SERVICE_QUERY_STATUS);
+    if (!svc) return false;
+    bool ok = (StartServiceW(svc, 0, nullptr) || GetLastError() == ERROR_SERVICE_ALREADY_RUNNING) &&
+              waitFor(svc, SERVICE_RUNNING);
+    CloseServiceHandle(svc);
+    return ok;
+}
+
 bool stopAudio() {
     SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
-    SC_HANDLE svc = scm ? OpenServiceW(scm, L"Audiosrv", SERVICE_STOP | SERVICE_QUERY_STATUS) : nullptr;
-    SERVICE_STATUS st{};
-    bool ok = svc && (ControlService(svc, SERVICE_CONTROL_STOP, &st) || GetLastError() == ERROR_SERVICE_NOT_ACTIVE) &&
-              waitFor(svc, SERVICE_STOPPED);
-    if (svc) CloseServiceHandle(svc);
-    if (scm) CloseServiceHandle(scm);
+    if (!scm) return false;
+    gStoppedDependents.clear();
+    if (SC_HANDLE audio = OpenServiceW(scm, L"Audiosrv", SERVICE_ENUMERATE_DEPENDENTS)) {
+        DWORD needed = 0, count = 0;
+        EnumDependentServicesW(audio, SERVICE_ACTIVE, nullptr, 0, &needed, &count);
+        std::vector<BYTE> buf(needed);
+        auto* deps = reinterpret_cast<ENUM_SERVICE_STATUSW*>(buf.data());
+        if (needed && EnumDependentServicesW(audio, SERVICE_ACTIVE, deps, needed, &needed, &count)) {
+            for (DWORD i = 0; i < count; ++i) {
+                if (stopService(scm, deps[i].lpServiceName)) gStoppedDependents.emplace_back(deps[i].lpServiceName);
+            }
+        }
+        CloseServiceHandle(audio);
+    }
+    const bool ok = stopService(scm, L"Audiosrv");
+    CloseServiceHandle(scm);
     return ok;
 }
 
 bool startAudio() {
     SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
-    SC_HANDLE svc = scm ? OpenServiceW(scm, L"Audiosrv", SERVICE_START | SERVICE_QUERY_STATUS) : nullptr;
-    bool ok = svc && (StartServiceW(svc, 0, nullptr) || GetLastError() == ERROR_SERVICE_ALREADY_RUNNING) &&
-              waitFor(svc, SERVICE_RUNNING);
-    if (svc) CloseServiceHandle(svc);
-    if (scm) CloseServiceHandle(scm);
+    if (!scm) return false;
+    const bool ok = startService(scm, L"Audiosrv");
+    // Dependents go back in the reverse of the order they were stopped in.
+    for (auto it = gStoppedDependents.rbegin(); it != gStoppedDependents.rend(); ++it) startService(scm, it->c_str());
+    gStoppedDependents.clear();
+    CloseServiceHandle(scm);
     return ok;
 }
 
