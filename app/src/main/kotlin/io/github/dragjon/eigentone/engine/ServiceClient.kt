@@ -112,7 +112,8 @@ class ServiceClient(private val scope: CoroutineScope = CoroutineScope(Superviso
 
     private companion object {
         const val TAG = "ServiceClient"
-        const val PIPE = """\\.\pipe\eigentone"""
+        /** The service's pipe. EIGENTONE_PIPE points a test copy elsewhere, so it can't change the real sound. */
+        val PIPE = """\\.\pipe\""" + (System.getenv("EIGENTONE_PIPE") ?: "eigentone")
         const val RETRY_MS = 2000L
         val json = Json { ignoreUnknownKeys = true }
     }

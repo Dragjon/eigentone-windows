@@ -56,6 +56,12 @@ REWRITE = {
     "help_status_control_body": "Whether Eigentone's plug-in is in the playing output's effects. A sound driver update can replace them, and then Eigentone's settings stop applying until it's added back.",
     "help_status_mode_body": "How Eigentone reaches the sound. On Windows its plug-in runs inside Windows' audio engine, for every app playing to the output.",
     "help_status_running_body": "Whether Eigentone's background service is running, which passes your settings to the plug-in.",
+    "welcome_on_body": "Eigentone works in the background for every app that plays. It keeps a tray icon by the clock, with quick controls.",
+    "welcome_headphones_none": "%1$s is playing now. Plug in or connect your headphones to set them up, or do it later in Devices.",
+    "welcome_headphones_later": "Everything for your headphones is in Devices, for whichever output is playing.",
+    "welcome_hands_note": "Switch Eigentone on and off, bypass it or change preset from the tray icon, or with Ctrl+Alt+E, Ctrl+Alt+B and Ctrl+Alt+arrows from any app.",
+    "welcome_sound_later": "Optional. It's also in Tools.",
+    "welcome_hello_note": "Setup takes about a minute. You can skip any step, and see this again from Settings, under Help and reset.",
 }
 
 # Small swaps, in order, applied to every string not rewritten above.

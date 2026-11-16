@@ -3785,6 +3785,8 @@ private fun SystemTab(state: AppState, status: EngineStatus) {
 
     EveryPresetSections(state)
 
+    ShortcutsSection()
+
     SettingsSection(stringResource(Res.string.ui_appearance)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -4430,7 +4432,7 @@ private fun OutputsSection(state: AppState) {
 
 /** A sound's whole curve as it plays on an output, filling the pane: a heading, the graph, and room for actions. */
 @Composable
-private fun CurvePane(
+internal fun CurvePane(
     state: AppState,
     outputKey: String,
     title: String,
@@ -4478,3 +4480,37 @@ private const val TOOL_RAIL_DP = 300
 private const val TOOL_TILE_COLUMNS = 3
 private const val TOOL_TIP_LINES = 6
 private const val DEVICE_PANEL_DP = 420
+
+/** The keys that work from any app, and whether each is Eigentone's or another app already holds it. */
+@Composable
+private fun ShortcutsSection() {
+    val held = io.github.dragjon.eigentone.platform.HotKeys.registered
+    val rows = listOf(
+        "Ctrl+Alt+B" to Res.string.win_key_bypass,
+        "Ctrl+Alt+E" to Res.string.win_key_power,
+        "Ctrl+Alt+Right" to Res.string.win_key_next,
+        "Ctrl+Alt+Left" to Res.string.win_key_previous,
+    )
+    SettingsSection(stringResource(Res.string.win_keys)) {
+        rows.forEach { (keys, what) ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(what), style = MaterialTheme.typography.bodyMedium, color = Palette.Text, modifier = Modifier.weight(1f))
+                if (keys in held) {
+                    Text(
+                        keys.replace("Right", "→").replace("Left", "←"),
+                        style = Readout,
+                        color = Palette.Text,
+                        modifier = Modifier
+                            .clip(KeyShape)
+                            .background(Palette.Background)
+                            .border(1.dp, Palette.Track, KeyShape)
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                } else {
+                    Text(stringResource(Res.string.win_key_taken, keys), style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
+                }
+            }
+        }
+        Text(stringResource(Res.string.win_keys_note), style = MaterialTheme.typography.bodySmall, color = Palette.TextDim, modifier = Modifier.padding(horizontal = 12.dp))
+    }
+}

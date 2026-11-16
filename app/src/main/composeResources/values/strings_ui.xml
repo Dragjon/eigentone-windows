@@ -888,30 +888,30 @@
     <string name="welcome_feature_eq" formatted="false">Shape the sound with faders, or start from a shape</string>
     <string name="welcome_feature_headphones" formatted="false">Correct your headphones and fit them to your ears</string>
     <string name="welcome_feature_presets" formatted="false">Save sounds, and switch automatically for each pair</string>
-    <string name="welcome_hello_note" formatted="false">Setup takes about a minute. You can skip any step, and see this again from Settings, under Help.</string>
+    <string name="welcome_hello_note" formatted="false">Setup takes about a minute. You can skip any step, and see this again from Settings, under Help and reset.</string>
     <string name="welcome_on_title" formatted="false">Turn it on</string>
-    <string name="welcome_on_body" formatted="false">Eigentone works in the background while anything plays. Android shows a notification while it runs, which also gives you quick controls.</string>
+    <string name="welcome_on_body" formatted="false">Eigentone works in the background for every app that plays. It keeps a tray icon by the clock, with quick controls.</string>
     <string name="welcome_turn_on" formatted="false">Turn on Eigentone</string>
     <string name="welcome_on_done" formatted="false">Eigentone is on and shaping the sound.</string>
     <string name="welcome_headphones_title" formatted="false">Your headphones</string>
     <string name="welcome_headphones_body" formatted="false">A correction evens out your headphones' own peaks and dips, from published measurements. Most people then like a little more bass than that.</string>
-    <string name="welcome_headphones_none" formatted="false">%1$s is playing now. Connect your headphones to set them up, or do it later on the device tab, named after what's playing.</string>
+    <string name="welcome_headphones_none" formatted="false">%1$s is playing now. Plug in or connect your headphones to set them up, or do it later in Devices.</string>
     <string name="welcome_headphones_using" formatted="false">Using %1$s.</string>
     <string name="welcome_headphones_tune" formatted="false">Adjust bass and treble</string>
     <string name="welcome_headphones_tune_note" formatted="false">Try the bass lift most people prefer, and hear it against the correction alone.</string>
     <string name="welcome_headphones_find" formatted="false">Find a correction</string>
-    <string name="welcome_headphones_later" formatted="false">Everything for your headphones is on the device tab, named after what's playing.</string>
+    <string name="welcome_headphones_later" formatted="false">Everything for your headphones is in Devices, for whichever output is playing.</string>
     <string name="welcome_sound_title" formatted="false">Find your sound</string>
     <string name="welcome_sound_note" formatted="false">Takes about two minutes. Play a song you know well before you start.</string>
     <string name="welcome_sound_start" formatted="false">Start</string>
-    <string name="welcome_sound_later" formatted="false">Optional. It's also on the device tab, under Listening tools.</string>
+    <string name="welcome_sound_later" formatted="false">Optional. It's also in Tools.</string>
     <string name="welcome_hands_title" formatted="false">How hands-on?</string>
     <string name="welcome_hands_body" formatted="false">Choose whether to turn on Advanced controls, which show every setting. Simple suits most people, and anything you change always stays in view.</string>
     <string name="welcome_simple" formatted="false">Simple (recommended)</string>
     <string name="welcome_simple_body" formatted="false">What most people need. Anything you change stays in view.</string>
     <string name="welcome_full" formatted="false">Advanced controls</string>
     <string name="welcome_full_body" formatted="false">Every control, including the parametric EQ, each compressor band and the limiter's timing.</string>
-    <string name="welcome_hands_note" formatted="false">Switch Eigentone on and off from the quick settings tile or the home screen widget, and start a preset from the app icon by pressing and holding it.</string>
+    <string name="welcome_hands_note" formatted="false">Switch Eigentone on and off, bypass it or change preset from the tray icon, or with Ctrl+Alt+E, Ctrl+Alt+B and Ctrl+Alt+arrows from any app.</string>
     <string name="welcome_show_again" formatted="false">Show the welcome again</string>
     <string name="help_welcome_title" formatted="false">Welcome</string>
     <string name="help_welcome_body" formatted="false">The short setup shown on first run: turning Eigentone on, your headphones' correction, finding your sound, and how much of the app to show. Nothing you've set is lost by running it again.</string>

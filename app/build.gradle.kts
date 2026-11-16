@@ -28,6 +28,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     // The frosted tab bar, as on Android. Multiplatform, so the same library runs here.
     implementation("dev.chrisbanes.haze:haze:1.2.2")
+    // Windows' own functions that Java has no way to reach: the title bar's colours and global hotkeys.
+    implementation("net.java.dev.jna:jna-platform:5.14.0")
     testImplementation("junit:junit:4.13.2")
 }
 
@@ -50,6 +52,12 @@ compose.desktop {
             // Files that ship beside the app, such as the agent below, found at run time through the
             // compose.application.resources.dir property.
             appResourcesRootDir.set(layout.buildDirectory.dir("app-resources"))
+            windows {
+                // Drawn from the logo by tools/make_icon.py.
+                iconFile.set(project.file("icons/eigentone.ico"))
+                menuGroup = "Eigentone"
+                upgradeUuid = "6c7c0c43-5c55-4f8e-9d8a-2a4f0c1b7e11"
+            }
         }
     }
 }

@@ -137,10 +137,12 @@ val LightColors = ThemeColors(
  * means that a theme change redraws whatever used it.
  */
 object Palette {
-    internal var colors by mutableStateOf(DarkColors)
+    var colors by mutableStateOf(DarkColors)
+        internal set
 
     /** Whether the theme in use is dark, whichever palette it came from. */
-    internal var dark by mutableStateOf(true)
+    var dark by mutableStateOf(true)
+        internal set
 
     val Background get() = colors.background
     val Bar get() = colors.bar

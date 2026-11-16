@@ -1,5 +1,14 @@
 package io.github.dragjon.eigentone.ui
 
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.focusRequester
 import org.jetbrains.compose.resources.*
 
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -109,90 +118,29 @@ private const val CLOSE_MS = 900
 @Composable
 fun WelcomeScreen(onSetEnabled: (Boolean) -> Unit, onFindSound: () -> Unit) {
     val state by Repo.state.collectAsStateWithLifecycle()
+    val output by Repo.output.collectAsStateWithLifecycle()
     val step = state.welcomeStep.coerceIn(0, STEPS - 1)
     fun go(to: Int) = Repo.update { it.copy(welcomeStep = to.coerceIn(0, STEPS - 1)) }
     fun finish() = Repo.update { it.copy(welcomeDone = true, welcomeStep = 0, guidedSetupSeen = true) }
 
     BackHandler(enabled = step > 0) { go(step - 1) }
 
-    // Start listening closes the page into a single lit line, the one the app then opens out of.
+    // Start listening closes the session into a single lit line, the one the app then opens out of.
     val closing = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
-    val haptics = LocalHapticFeedback.current
     fun startListening() {
         if (closing.value > 0f) return
         scope.launch {
             closing.animateTo(1f, tween(CLOSE_MS, easing = FastOutSlowInEasing))
-            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             openingFromWelcome.value = true
             finish()
         }
     }
+    fun next() = if (step < STEPS - 1) go(step + 1) else startListening()
 
-    // Pages follow the finger, as any pager does (user decision). The page settled on is the step, saved so the
-    // welcome resumes there, and a step chosen another way, by Back or on returning from Find your sound, slides there.
-    // One page past the last step holds only the lit line the app opens out of (user decision): swiping on slides
-    // the last step away like any other, and settling on the line opens the app from it.
-    val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = step) { STEPS + 1 }
-    LaunchedEffect(pager) {
-        androidx.compose.runtime.snapshotFlow { pager.settledPage }.collect { settled ->
-            if (settled < STEPS && settled != Repo.state.value.welcomeStep) go(settled)
-        }
-    }
-    // The power-on starts on the last page as soon as the slide heads for it, so there's never a plain line to
-    // wait on (user decision), and rewinds if the swipe turns back.
-    val powerOn = remember { Animatable(0f) }
-    LaunchedEffect(pager) {
-        androidx.compose.runtime.snapshotFlow { pager.targetPage == STEPS || pager.currentPage == STEPS }.collect { heading ->
-            if (heading) {
-                powerOn.animateTo(1f, tween(((1f - powerOn.value) * OPEN_MS).toInt().coerceAtLeast(1), easing = LinearEasing))
-            } else {
-                powerOn.animateTo(0f, tween(160))
-            }
-        }
-    }
-    // When the page arrives, the app takes over just where the power-on has got to, so it's one animation.
-    LaunchedEffect(pager) {
-        androidx.compose.runtime.snapshotFlow {
-            pager.currentPage == STEPS && kotlin.math.abs(pager.currentPageOffsetFraction) < LINE_ARRIVED
-        }.first { it }
-        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        openingFrom.value = powerOn.value
-        openingFromWelcome.value = true
-        finish()
-    }
-    LaunchedEffect(step) {
-        if (pager.settledPage != step && !pager.isScrollInProgress) pager.animateScrollToPage(step)
-    }
-    // The steps' own page, which stays on the last while sliding on to the line.
-    val page = pager.currentPage.coerceAtMost(STEPS - 1)
-    val swipeAt = with(androidx.compose.ui.platform.LocalDensity.current) { SWIPE_DP.dp.toPx() }
-
-    @Composable
-    fun Page(page: Int, modifier: Modifier) {
-        Box(modifier.verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
-            Column(
-                Modifier
-                    .widthIn(max = 560.dp)
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                when (page) {
-                    STEPS -> Unit
-                    0 -> Hello()
-                    1 -> TurnOn(state, onSetEnabled)
-                    2 -> YourHeadphones(state)
-                    3 -> FindYourSound {
-                        // Comes back to the last step once the test is done or left.
-                        go(4)
-                        onFindSound()
-                    }
-                    else -> HandsOn(state)
-                }
-            }
-        }
-    }
+    // The arrows and Enter move through the steps, as in any setup.
+    val keys = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { keys.requestFocus() } }
 
     Column(
         Modifier
@@ -202,8 +150,6 @@ fun WelcomeScreen(onSetEnabled: (Boolean) -> Unit, onFindSound: () -> Unit) {
                 drawRect(Palette.Background)
                 drawContent()
                 if (c > 0f) {
-                    // As the page flattens onto the middle, the line it flattens onto runs in from the right edge,
-                    // easing in as it nears the far side, and the app then opens out of it.
                     val w = size.width
                     val mid = size.height / 2f
                     val spill = FastOutSlowInEasing.transform(c)
@@ -216,71 +162,305 @@ fun WelcomeScreen(onSetEnabled: (Boolean) -> Unit, onFindSound: () -> Unit) {
                 scaleX = 1f - 0.06f * c
                 alpha = 1f - ((c - 0.6f) / 0.4f).coerceIn(0f, 1f)
             }
-            .background(Palette.Background)
-            .windowInsetsPadding(WindowInsets.safeDrawing),
+            .background(Palette.Bar)
+            .focusRequester(keys)
+            .focusable()
+            .onPreviewKeyEvent { e ->
+                if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (e.key) {
+                    androidx.compose.ui.input.key.Key.DirectionRight, androidx.compose.ui.input.key.Key.Enter -> { next(); true }
+                    androidx.compose.ui.input.key.Key.DirectionLeft -> { if (step > 0) go(step - 1); true }
+                    else -> false
+                }
+            },
     ) {
+        // The studio's own top bar, saying this is setup.
         Row(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 32.dp)
-                .padding(start = 24.dp, end = 8.dp),
+            Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // The arrow slides on to the line, as a swipe would.
-            StepDots(page, Modifier.weight(1f), onStart = { scope.launch { pager.animateScrollToPage(STEPS) } })
-            if (page < STEPS - 1) TextButton(onClick = ::finish) { Text(stringResource(Res.string.welcome_skip)) }
+            androidx.compose.foundation.Image(painterResource(Res.drawable.app_icon_small), contentDescription = null, modifier = Modifier.size(20.dp))
+            Text("Eigentone", style = MaterialTheme.typography.titleMedium, color = Palette.Text, modifier = Modifier.padding(start = 10.dp))
+            Text(
+                stringResource(Res.string.win_welcome_setup_label).uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = Palette.TextDim,
+                letterSpacing = androidx.compose.ui.unit.TextUnit(1.2f, androidx.compose.ui.unit.TextUnitType.Sp),
+                modifier = Modifier.padding(start = 12.dp),
+            )
+            Spacer(Modifier.weight(1f))
+            if (step < STEPS - 1) TextButton(onClick = ::finish) { Text(stringResource(Res.string.win_welcome_skip)) }
         }
-        Box(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-        ) {
-            // No stretch at the ends, which would fight the slide on to the line.
-            @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-            run {
-                androidx.compose.foundation.pager.HorizontalPager(
-                    state = pager,
-                    // The next step is ready before it's swiped to, so it slides in already drawn.
-                    beyondViewportPageCount = 1,
-                    // Turns on a fifth of a swipe, as Android's own pagers do, rather than needing half (user decision).
-                    flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(state = pager, snapPositionalThreshold = SNAP_AT),
-                    modifier = Modifier.matchParentSize(),
-                ) { shown -> if (shown == STEPS) LinePage({ powerOn.value }, Modifier.fillMaxSize()) else Page(shown, Modifier.fillMaxSize()) }
+        Row(Modifier.weight(1f).fillMaxWidth()) {
+            // The steps, as a panel down the left.
+            Column(Modifier.width(WELCOME_RAIL_DP.dp).fillMaxHeight()) {
+                SettingsSection(stringResource(Res.string.win_welcome_steps)) {
+                    WELCOME_STEPS.forEachIndexed { i, name ->
+                        StepRow(i, stringResource(name), current = i == step, done = i < step) { go(i) }
+                    }
+                }
+                Box(Modifier.weight(1f).fillMaxWidth().background(Palette.Surface))
+            }
+            Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.Line))
+            // Your sound in the middle, as on Tune's canvas, changing as setup changes it.
+            CurvePane(
+                state,
+                output.key,
+                title = stringResource(STEP_TITLES[step]),
+                subtitle = stringResource(STEP_BODIES[step]),
+                modifier = Modifier.weight(1f),
+            )
+            Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.Line))
+            // This step's choices, as panels on the right.
+            Box(Modifier.width(WELCOME_PANEL_DP.dp).fillMaxHeight().background(Palette.Bar)) {
+                Column(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    when (step) {
+                        0 -> Hello()
+                        1 -> TurnOn(state, onSetEnabled)
+                        2 -> YourHeadphones(state)
+                        3 -> FindYourSound {
+                            // Comes back to the last step once the test is done or left.
+                            go(4)
+                            onFindSound()
+                        }
+                        else -> HandsOn(state)
+                    }
+                }
             }
         }
-        // A single hint, on the first page only, centred under the steps with an arrow that nudges the way to swipe
-        // (user decision). The last step needs none: its lit arrow says where to go.
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 32.dp),
-            contentAlignment = Alignment.Center,
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Palette.Line))
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (page == 0) {
-                val nudge by androidx.compose.animation.core.rememberInfiniteTransition(label = "swipeHint").animateFloat(
-                    initialValue = 0f,
-                    targetValue = 1f,
-                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                        tween(900, easing = FastOutSlowInEasing),
-                        androidx.compose.animation.core.RepeatMode.Reverse,
-                    ),
-                    label = "swipeNudge",
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(Res.string.welcome_swipe_hint), style = MaterialTheme.typography.labelMedium, color = Palette.TextDim)
-                    Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = Palette.TextDim,
-                        modifier = Modifier
-                            .size(18.dp)
-                            .graphicsLayer { translationX = nudge * 4.dp.toPx() },
-                    )
-                }
+            Text(stringResource(Res.string.welcome_step_of, step + 1, STEPS), style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
+            Spacer(Modifier.weight(1f))
+            if (step > 0) FilledTonalButton(onClick = { go(step - 1) }) { Text(stringResource(Res.string.ui_back)) }
+            Button(onClick = ::next, modifier = Modifier.widthIn(min = 120.dp)) {
+                Text(stringResource(if (step < STEPS - 1) Res.string.win_welcome_next else Res.string.welcome_finish))
             }
         }
     }
 }
+
+/** One step in the list: its number, ticked once done, and its name; the current one lit, as a selected row is. */
+@Composable
+private fun StepRow(index: Int, name: String, current: Boolean, done: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(if (current) Palette.SurfaceHigh else androidx.compose.ui.graphics.Color.Transparent)
+            .handCursor()
+            .clickable(onClick = onClick)
+            .padding(end = 12.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.width(3.dp).height(18.dp).background(if (current) Palette.Lit else androidx.compose.ui.graphics.Color.Transparent))
+        Box(
+            Modifier
+                .padding(start = 9.dp)
+                .size(18.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(if (current || done) Palette.LitFill else Palette.Track),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (done) {
+                Icon(Icons.Filled.Check, contentDescription = null, tint = Palette.OnLit, modifier = Modifier.size(12.dp))
+            } else {
+                Text("${index + 1}", style = Readout, color = if (current) Palette.OnLit else Palette.TextDim)
+            }
+        }
+        Text(name, style = MaterialTheme.typography.bodyMedium, color = if (current) Palette.Text else Palette.TextDim, modifier = Modifier.padding(start = 10.dp))
+    }
+}
+
+/** Plain text in a panel, at the panel's own indent. */
+@Composable
+private fun PanelText(text: String, dim: Boolean = true, lit: Boolean = false) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = when {
+            lit -> Palette.Lit
+            dim -> Palette.TextDim
+            else -> Palette.Text
+        },
+        modifier = Modifier.padding(horizontal = 12.dp),
+    )
+}
+
+@Composable
+private fun Hello() {
+    SettingsSection(stringResource(Res.string.win_welcome_what)) {
+        Feature(Res.drawable.ic_tab_eq, Res.string.welcome_feature_eq)
+        Feature(Res.drawable.ic_tab_headphones, Res.string.welcome_feature_headphones)
+        Feature(Res.drawable.ic_tab_presets, Res.string.welcome_feature_presets)
+    }
+    SettingsSection(stringResource(Res.string.win_welcome_about)) {
+        PanelText(stringResource(Res.string.welcome_hello_note))
+    }
+}
+
+@Composable
+private fun Feature(icon: DrawableResource, text: StringResource) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(painterResource(icon), contentDescription = null, tint = Palette.Lit, modifier = Modifier.size(16.dp))
+        Text(stringResource(text), style = MaterialTheme.typography.bodyMedium, color = Palette.Text, modifier = Modifier.padding(start = 12.dp))
+    }
+}
+
+@Composable
+private fun TurnOn(state: AppState, onSetEnabled: (Boolean) -> Unit) {
+    val status by Repo.status.collectAsStateWithLifecycle()
+    SettingsSection(stringResource(Res.string.win_welcome_power)) {
+        SwitchSetting(stringResource(Res.string.win_welcome_eigentone_on), Help.power, state.enabled) { on -> onSetEnabled(on) }
+        val ok = state.enabled && status.running && status.hasControl && status.error == null
+        PanelText(
+            when {
+                !state.enabled -> stringResource(Res.string.win_welcome_off_note)
+                status.error != null -> status.error.orEmpty()
+                !status.running -> stringResource(Res.string.ui_starting)
+                !status.hasControl -> stringResource(Res.string.ui_another_audio_app_has_taken_control)
+                else -> stringResource(Res.string.welcome_on_done)
+            },
+            lit = ok,
+        )
+    }
+    SettingsSection(stringResource(Res.string.ui_use_one_eq_at_a_time)) {
+        PanelText(stringResource(Res.string.ui_eq_in_a_headphone_app_such_2))
+    }
+}
+
+@Composable
+private fun YourHeadphones(state: AppState) {
+    val output by Repo.output.collectAsStateWithLifecycle()
+    val builtIn = rememberConnectedOutputNames().firstNotNullOfOrNull(BuiltIns::correctionFor)
+    var finding by remember { mutableStateOf(false) }
+    var tuning by remember { mutableStateOf(false) }
+    val corrected = state.current.filters.any { it.gainDb != 0.0 } || state.current.tone.importedCurve.isNotEmpty()
+
+    SettingsSection(stringResource(Res.string.win_welcome_output)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(painterResource(output.kind.icon()), contentDescription = null, tint = Palette.Lit, modifier = Modifier.size(16.dp))
+            Text(output.label, style = MaterialTheme.typography.bodyMedium, color = Palette.Text, modifier = Modifier.padding(start = 12.dp))
+        }
+        if (!Profiles.supportsModes(output.key) && builtIn == null) {
+            PanelText(stringResource(Res.string.welcome_headphones_none, output.label))
+        } else if (corrected) {
+            PanelText(stringResource(Res.string.welcome_headphones_using, state.current.name), lit = true)
+            ActionRow(stringResource(Res.string.welcome_headphones_tune), Help.correction, detail = stringResource(Res.string.welcome_headphones_tune_note)) { tuning = true }
+        } else if (builtIn != null) {
+            ActionRow(stringResource(Res.string.ui_use_correction, builtIn.name), Help.correction) {
+                Repo.assignToOutput(output.key, builtIn.id)
+                Repo.loadPreset(builtIn)
+            }
+        } else {
+            ActionRow(stringResource(Res.string.welcome_headphones_find), Help.correction) { finding = true }
+        }
+    }
+    SettingsSection(stringResource(Res.string.win_welcome_later)) {
+        PanelText(stringResource(Res.string.welcome_headphones_later))
+    }
+    if (finding) AutoEqDialog(onDismiss = { finding = false }) { finding = false }
+    if (tuning) CorrectionTuner(onDismiss = { tuning = false })
+}
+
+@Composable
+private fun FindYourSound(onStart: () -> Unit) {
+    SettingsSection(stringResource(Res.string.welcome_sound_title)) {
+        ActionRow(stringResource(Res.string.win_welcome_sound_start), Help.finder, detail = stringResource(Res.string.welcome_sound_note), onClick = onStart)
+        PanelText(stringResource(Res.string.welcome_sound_later))
+    }
+}
+
+@Composable
+private fun HandsOn(state: AppState) {
+    SettingsSection(stringResource(Res.string.win_welcome_controls)) {
+        Column(Modifier.selectableGroup()) {
+            Choice(stringResource(Res.string.welcome_simple), stringResource(Res.string.welcome_simple_body), !state.advancedControls) {
+                Repo.update { it.copy(advancedControls = false) }
+            }
+            Choice(stringResource(Res.string.welcome_full), stringResource(Res.string.welcome_full_body), state.advancedControls) {
+                Repo.update { it.copy(advancedControls = true) }
+            }
+        }
+        PanelText(stringResource(Res.string.welcome_hands_where))
+    }
+    SettingsSection(stringResource(Res.string.ui_theme)) {
+        val modes = ThemeMode.entries
+        SlidingToggle(
+            options = listOf(
+                ToggleOption(stringResource(Res.string.ui_theme_device)),
+                ToggleOption(stringResource(Res.string.ui_theme_light)),
+                ToggleOption(stringResource(Res.string.ui_theme_dark)),
+            ),
+            selected = modes.indexOf(state.themeMode),
+            onSelect = { i -> Repo.update { it.copy(themeMode = modes[i]) } },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        )
+    }
+    SettingsSection(stringResource(Res.string.win_welcome_quick)) {
+        PanelText(stringResource(Res.string.welcome_hands_note))
+    }
+}
+
+/** A choice as a radio row: a small round mark, the name, and what it means beneath. */
+@Composable
+private fun Choice(title: String, body: String, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(if (selected) Palette.SurfaceHigh else androidx.compose.ui.graphics.Color.Transparent)
+            .handCursor()
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            Modifier
+                .padding(top = 2.dp)
+                .size(14.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .border(1.5.dp, if (selected) Palette.Lit else Palette.TextDim, androidx.compose.foundation.shape.CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) Box(Modifier.size(7.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Palette.Lit))
+        }
+        Column(Modifier.padding(start = 10.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = Palette.Text)
+            Text(body, style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
+        }
+    }
+}
+
+/** The steps' names, for the list down the left, and each one's heading and explanation over the curve. */
+private val WELCOME_STEPS = listOf(
+    Res.string.win_welcome_step_hello,
+    Res.string.win_welcome_step_on,
+    Res.string.win_welcome_step_headphones,
+    Res.string.win_welcome_step_sound,
+    Res.string.win_welcome_step_hands,
+)
+private val STEP_TITLES = listOf(
+    Res.string.welcome_hello_title,
+    Res.string.welcome_on_title,
+    Res.string.welcome_headphones_title,
+    Res.string.welcome_sound_title,
+    Res.string.welcome_hands_title,
+)
+private val STEP_BODIES = listOf(
+    Res.string.welcome_hello_body,
+    Res.string.welcome_on_body,
+    Res.string.welcome_headphones_body,
+    Res.string.ui_compare_two_versions_of_a_song_a_few_tim,
+    Res.string.welcome_hands_body,
+)
+private const val WELCOME_RAIL_DP = 240
+private const val WELCOME_PANEL_DP = 360
 
 /** How far through the window from [start] to [end] the progress is, from 0 to 1. */
 private fun phase(progress: Float, start: Float, end: Float) = ((progress - start) / (end - start)).coerceIn(0f, 1f)
@@ -404,190 +584,6 @@ private fun StepDots(step: Int, modifier: Modifier, onStart: () -> Unit) {
                 modifier = Modifier.size(22.dp),
             )
         }
-    }
-}
-
-@Composable
-private fun Heading(title: String, body: String) {
-    Text(title, style = MaterialTheme.typography.headlineSmall, color = Palette.Text)
-    Text(body, style = MaterialTheme.typography.bodyLarge, color = Palette.TextDim)
-}
-
-/** A tip or result set apart from the step's explanation. */
-@Composable
-private fun Note(text: String, lit: Boolean = false) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = if (lit) Palette.Lit else Palette.Text,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(PanelShape)
-            .background(Palette.Surface)
-            .padding(16.dp),
-    )
-}
-
-@Composable
-private fun Hello() {
-    // The mark in full colour: a double helix untwisting into one sound wave.
-    androidx.compose.foundation.Image(
-        painterResource(Res.drawable.ic_logo),
-        contentDescription = null,
-        modifier = Modifier
-            .padding(top = 16.dp)
-            .size(88.dp)
-            .clip(RoundedCornerShape(24.dp))
-            // The icon's own white tile, in either theme, so it looks the same as on the home screen.
-            .background(androidx.compose.ui.graphics.Color.White)
-            // A faint rim, so the white tile still has an edge on a light page.
-            .border(1.dp, Palette.KeyBorder, RoundedCornerShape(24.dp))
-            .padding(4.dp),
-    )
-    Heading(stringResource(Res.string.welcome_hello_title), stringResource(Res.string.welcome_hello_body))
-    Feature(Res.drawable.ic_tab_eq, Res.string.welcome_feature_eq)
-    Feature(Res.drawable.ic_tab_headphones, Res.string.welcome_feature_headphones)
-    Feature(Res.drawable.ic_tab_presets, Res.string.welcome_feature_presets)
-    Text(stringResource(Res.string.welcome_hello_note), style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
-}
-
-@Composable
-private fun Feature(icon: DrawableResource, text: StringResource) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(40.dp)
-                .clip(KeyShape)
-                .background(Palette.SurfaceHigh),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(painterResource(icon), contentDescription = null, tint = Palette.Lit)
-        }
-        Text(stringResource(text), style = MaterialTheme.typography.bodyLarge, color = Palette.Text, modifier = Modifier.padding(start = 16.dp))
-    }
-}
-
-@Composable
-private fun TurnOn(state: AppState, onSetEnabled: (Boolean) -> Unit) {
-    val status by Repo.status.collectAsStateWithLifecycle()
-    Heading(stringResource(Res.string.welcome_on_title), stringResource(Res.string.welcome_on_body))
-    if (!state.enabled) {
-        Button(
-            // Android asks for its notification here first. Windows needs nothing more.
-            onClick = { onSetEnabled(true) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 32.dp),
-        ) { Text(stringResource(Res.string.welcome_turn_on)) }
-    } else {
-        Note(
-            when {
-                status.error != null -> status.error.orEmpty()
-                !status.running -> stringResource(Res.string.ui_starting)
-                !status.hasControl -> stringResource(Res.string.ui_another_audio_app_has_taken_control)
-                else -> stringResource(Res.string.welcome_on_done)
-            },
-            lit = status.running && status.hasControl && status.error == null,
-        )
-    }
-    BackgroundUse()
-    Text(stringResource(Res.string.ui_use_one_eq_at_a_time), style = MaterialTheme.typography.titleSmall, color = Palette.Text)
-    Text(stringResource(Res.string.ui_eq_in_a_headphone_app_such_2), style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
-}
-
-/** Android asks to be left out of battery optimisation here. Windows keeps Eigentone's service running anyway. */
-@Composable
-private fun BackgroundUse() = Unit
-
-@Composable
-private fun YourHeadphones(state: AppState) {
-    val output by Repo.output.collectAsStateWithLifecycle()
-    // Read directly, because the service's output isn't known while Eigentone is off.
-    val builtIn = rememberConnectedOutputNames().firstNotNullOfOrNull(BuiltIns::correctionFor)
-    var finding by remember { mutableStateOf(false) }
-    var tuning by remember { mutableStateOf(false) }
-    val corrected = state.current.filters.any { it.gainDb != 0.0 } || state.current.tone.importedCurve.isNotEmpty()
-
-    Heading(stringResource(Res.string.welcome_headphones_title), stringResource(Res.string.welcome_headphones_body))
-    if (!Profiles.supportsModes(output.key) && builtIn == null) {
-        Note(stringResource(Res.string.welcome_headphones_none, output.label))
-        return
-    }
-    Text(output.label, style = MaterialTheme.typography.titleMedium, color = Palette.Text)
-    if (corrected) {
-        Note(stringResource(Res.string.welcome_headphones_using, state.current.name), lit = true)
-        FilledTonalButton(onClick = { tuning = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp)) {
-            Text(stringResource(Res.string.welcome_headphones_tune))
-        }
-        Text(stringResource(Res.string.welcome_headphones_tune_note), style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
-    } else if (builtIn != null) {
-        Button(
-            onClick = {
-                Repo.assignToOutput(output.key, builtIn.id)
-                Repo.loadPreset(builtIn)
-            },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp),
-        ) { Text(stringResource(Res.string.ui_use_correction, builtIn.name)) }
-    } else {
-        Button(onClick = { finding = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp)) {
-            Text(stringResource(Res.string.welcome_headphones_find))
-        }
-    }
-    Text(stringResource(Res.string.welcome_headphones_later), style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
-
-    if (finding) AutoEqDialog(onDismiss = { finding = false }) { finding = false }
-    if (tuning) CorrectionTuner(onDismiss = { tuning = false })
-}
-
-@Composable
-private fun FindYourSound(onStart: () -> Unit) {
-    Heading(stringResource(Res.string.welcome_sound_title), stringResource(Res.string.ui_compare_two_versions_of_a_song_a_few_tim))
-    Note(stringResource(Res.string.welcome_sound_note))
-    Button(onClick = onStart, modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp)) { Text(stringResource(Res.string.welcome_sound_start)) }
-    Text(stringResource(Res.string.welcome_sound_later), style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
-}
-
-@Composable
-private fun HandsOn(state: AppState) {
-    Heading(stringResource(Res.string.welcome_hands_title), stringResource(Res.string.welcome_hands_body))
-    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Choice(
-            title = stringResource(Res.string.welcome_simple),
-            body = stringResource(Res.string.welcome_simple_body),
-            selected = !state.advancedControls,
-        ) { Repo.update { it.copy(advancedControls = false) } }
-        Choice(
-            title = stringResource(Res.string.welcome_full),
-            body = stringResource(Res.string.welcome_full_body),
-            selected = state.advancedControls,
-        ) { Repo.update { it.copy(advancedControls = true) } }
-    }
-    Text(stringResource(Res.string.welcome_hands_where), style = MaterialTheme.typography.bodySmall, color = Palette.TextDim)
-    Text(stringResource(Res.string.ui_theme), style = MaterialTheme.typography.titleSmall, color = Palette.Text, modifier = Modifier.padding(top = 8.dp))
-    val modes = ThemeMode.entries
-    WordSegments(
-        labels = listOf(stringResource(Res.string.ui_theme_device), stringResource(Res.string.ui_theme_light), stringResource(Res.string.ui_theme_dark)),
-        selected = modes.indexOf(state.themeMode),
-        onSelect = { i -> Repo.update { it.copy(themeMode = modes[i]) } },
-    )
-    Note(stringResource(Res.string.welcome_hands_note))
-}
-
-/** A large, plainly selectable card for a choice that sets up the whole app. */
-@Composable
-private fun Choice(title: String, body: String, selected: Boolean, onSelect: () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(PanelShape)
-            .background(if (selected) Palette.SurfaceHigh else Palette.Surface)
-            .border(if (selected) 2.dp else 1.dp, if (selected) Palette.Lit else Palette.Line, PanelShape)
-            .handCursor().selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, color = if (selected) Palette.Lit else Palette.Text)
-        Text(body, style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
     }
 }
 

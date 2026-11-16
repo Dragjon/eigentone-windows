@@ -56,6 +56,22 @@ fun main(args: Array<String>) {
         "level" -> io.github.dragjon.eigentone.engine.SelfTest.level()
     }
 
+    // Keys that work from any app: Bypass, on and off, and the presets.
+    io.github.dragjon.eigentone.platform.HotKeys.start(
+        listOf(
+            io.github.dragjon.eigentone.platform.HotKeys.Shortcut("Ctrl+Alt+B", 'B'.code) {
+                if (Repo.state.value.enabled) Repo.update { it.copy(bypass = !it.bypass) }
+            },
+            io.github.dragjon.eigentone.platform.HotKeys.Shortcut("Ctrl+Alt+E", 'E'.code) {
+                val on = !Repo.state.value.enabled
+                Repo.update { it.copy(enabled = on) }
+                if (on) AudioService.start()
+            },
+            io.github.dragjon.eigentone.platform.HotKeys.Shortcut("Ctrl+Alt+Right", io.github.dragjon.eigentone.platform.HotKeys.RIGHT) { Repo.nextPreset() },
+            io.github.dragjon.eigentone.platform.HotKeys.Shortcut("Ctrl+Alt+Left", io.github.dragjon.eigentone.platform.HotKeys.LEFT) { previousPreset() },
+        ),
+    )
+
     // Signed in to Windows, it starts in the tray; opened by hand, in its window.
     val startInTray = Startup.TRAY_ARG in args
     // The sign-in entry follows the setting, and points at wherever Eigentone is installed now.
@@ -92,6 +108,7 @@ fun main(args: Array<String>) {
                 }
             },
             visible = visible,
+            icon = painterResource(Res.drawable.app_icon_small),
             title = "Eigentone",
             state = rememberWindowState(size = startSize(), position = androidx.compose.ui.window.WindowPosition(androidx.compose.ui.Alignment.Center)),
             onPreviewKeyEvent = { e ->
@@ -116,6 +133,12 @@ fun main(args: Array<String>) {
                 window.requestFocus()
             }
             AppRoot()
+            // Windows' title bar in the studio's colours, following the theme as it changes.
+            val colors = io.github.dragjon.eigentone.ui.Palette.colors
+            val dark = io.github.dragjon.eigentone.ui.Palette.dark
+            LaunchedEffect(colors, dark) {
+                io.github.dragjon.eigentone.platform.TitleBar.style(window, dark, colors.bar, colors.text, colors.line)
+            }
         }
     }
 }
@@ -134,7 +157,7 @@ private fun ApplicationScope.EigentoneTray(state: TrayState, onOpen: () -> Unit,
             .take(TRAY_PRESETS)
     }
     Tray(
-        icon = painterResource(Res.drawable.ic_logo),
+        icon = painterResource(Res.drawable.app_icon_small),
         state = state,
         tooltip = if (app.enabled) {
             stringResource(if (app.bypass) Res.string.win_tray_tooltip_bypass else Res.string.win_tray_tooltip_on, app.current.name)
@@ -162,6 +185,16 @@ private fun ApplicationScope.EigentoneTray(state: TrayState, onOpen: () -> Unit,
             Item(stringResource(Res.string.win_tray_quit), onClick = onQuit)
         },
     )
+}
+
+/** Back through favourites, or every preset when there are none: Repo.nextPreset the other way. */
+private fun previousPreset() {
+    if (Repo.toolBusy) return
+    val state = Repo.state.value
+    val all = BuiltIns.availableFor(listOf(Repo.output.value.key)) + state.presets
+    val cycle = all.filter { it.id in state.favorites }.ifEmpty { all }
+    val index = cycle.indexOfFirst { it.id == state.current.id }
+    Repo.loadPreset(cycle[(if (index < 0) 0 else index - 1 + cycle.size) % cycle.size])
 }
 
 /** The presets the tray lists, favourites first: enough to choose from, few enough to fit a menu. */
