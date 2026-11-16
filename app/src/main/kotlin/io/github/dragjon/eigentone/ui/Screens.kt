@@ -352,7 +352,8 @@ private val LocalOpenShapes =compositionLocalOf<() -> Unit> { error("No shape li
 fun EigentoneApp(onSetEnabled: (Boolean) -> Unit) {
     val state by Repo.state.collectAsStateWithLifecycle()
     val status by Repo.status.collectAsStateWithLifecycle()
-    var tab by rememberSaveable { mutableStateOf(Tab.EQ) }
+    // EIGENTONE_MODULE opens another module first, for looking at a layout without clicking to it.
+    var tab by rememberSaveable { mutableStateOf(System.getenv("EIGENTONE_MODULE")?.let { m -> Tab.entries.firstOrNull { it.name == m } } ?: Tab.EQ) }
     // Settings opens from the top bar, so Back returns to whichever tab it was opened from.
     var beforeSettings by rememberSaveable { mutableStateOf(Tab.EQ) }
     // Each tab has its own position. Moving to one starts it at the top; Back from Settings returns to where you were.
@@ -375,30 +376,27 @@ fun EigentoneApp(onSetEnabled: (Boolean) -> Unit) {
             PresetShortcuts.update(appContext, PresetOrganiser.shortcuts(state, available))
         }
     }
-    var finding by rememberSaveable { mutableStateOf(false) }
-    var refining by rememberSaveable { mutableStateOf(false) }
-    var browsingShapes by rememberSaveable { mutableStateOf(false) }
-    var checkingHearing by rememberSaveable { mutableStateOf(false) }
-    var comparing by rememberSaveable { mutableStateOf(false) }
-    var sweeping by rememberSaveable { mutableStateOf(false) }
-    var findingPeaks by rememberSaveable { mutableStateOf(false) }
-    var consoleOpen by rememberSaveable { mutableStateOf(false) }
+    // The tools open in the Tools module's pane, not over the whole window. Opened from another module, closing
+    // one goes back there.
+    var tool by rememberSaveable { mutableStateOf<StudioTool?>(null) }
+    var toolReturn by rememberSaveable { mutableStateOf<Tab?>(null) }
+    fun openTool(t: StudioTool) {
+        if (tab != Tab.TOOLS) toolReturn = tab
+        tool = t
+        tab = Tab.TOOLS
+    }
+    fun closeTool() {
+        tool = null
+        toolReturn?.let { tab = it }
+        toolReturn = null
+    }
     var expandingFaders by rememberSaveable { mutableStateOf(false) }
-    var comparingCurves by rememberSaveable { mutableStateOf(false) }
 
     // Which full screen is open over the app, if any. Each slides in from the right and back out the way it came.
     val screen = when {
         expandingFaders -> Overlay.FADERS
-        findingPeaks -> Overlay.PEAKS
-        consoleOpen -> Overlay.CONSOLE
-        sweeping -> Overlay.SWEEP
-        comparing -> Overlay.COMPARE
-        checkingHearing -> Overlay.HEARING
-        finding -> Overlay.FINDER
-        refining -> Overlay.REFINE
-        browsingShapes -> Overlay.SHAPES
-        comparingCurves -> Overlay.CURVES
-        // After the tools above, so Find your sound opens over the welcome and returns to it.
+        // Find your sound opens over the welcome and returns to it.
+        !state.welcomeDone && tool == StudioTool.FINDER -> Overlay.FINDER
         !state.welcomeDone -> Overlay.WELCOME
         else -> null
     }
@@ -426,35 +424,30 @@ fun EigentoneApp(onSetEnabled: (Boolean) -> Unit) {
     ) { shown ->
     when (shown) {
         Overlay.FADERS -> ExpandedFaders(onClose = { expandingFaders = false })
-        Overlay.PEAKS -> PeakFinderScreen(onClose = { findingPeaks = false })
-        Overlay.CONSOLE -> DebugConsoleScreen(onClose = { consoleOpen = false })
-        Overlay.SWEEP -> SweepScreen(onClose = { sweeping = false })
-        Overlay.COMPARE -> CompareScreen(onSetEnabled = onSetEnabled, onClose = { comparing = false })
-        Overlay.HEARING -> HearingScreen(onClose = { checkingHearing = false })
-        Overlay.FINDER -> FinderScreen(onSetEnabled = onSetEnabled, onClose = { finding = false })
-        Overlay.REFINE -> RefineScreen(onSetEnabled = onSetEnabled, onClose = { refining = false })
-        Overlay.SHAPES -> ShapeBrowser(onClose = { browsingShapes = false })
-        Overlay.CURVES -> CurveCompareScreen(onClose = { comparingCurves = false })
-        Overlay.WELCOME -> WelcomeScreen(onSetEnabled = onSetEnabled, onFindSound = { finding = true })
-        null -> AppScreen(state, status, tab, { tab = it }, beforeSettings, { beforeSettings = it }, scrolls, tabScope, toggleSettings, snackbar, onSetEnabled,
+        Overlay.FINDER -> FinderScreen(onSetEnabled = onSetEnabled, onClose = { tool = null })
+        Overlay.WELCOME -> WelcomeScreen(onSetEnabled = onSetEnabled, onFindSound = { tool = StudioTool.FINDER })
+        else -> AppScreen(state, status, tab, { t -> if (t != Tab.TOOLS) toolReturn = null; tab = t }, beforeSettings, { beforeSettings = it }, scrolls, tabScope, toggleSettings, snackbar, onSetEnabled,
             open = OverlayOpeners(
-                finder = { finding = true },
-                refine = { refining = true },
-                shapes = { browsingShapes = true },
-                hearing = { checkingHearing = true },
-                compare = { comparing = true },
-                sweep = { sweeping = true },
-                peaks = { findingPeaks = true },
-                console = { consoleOpen = true },
+                finder = { openTool(StudioTool.FINDER) },
+                refine = { openTool(StudioTool.REFINE) },
+                shapes = { openTool(StudioTool.SHAPES) },
+                hearing = { openTool(StudioTool.HEARING) },
+                compare = { openTool(StudioTool.COMPARE) },
+                sweep = { openTool(StudioTool.SWEEP) },
+                peaks = { openTool(StudioTool.PEAKS) },
+                console = { openTool(StudioTool.CONSOLE) },
                 faders = { expandingFaders = true },
-                curves = { comparingCurves = true },
+                curves = { openTool(StudioTool.CURVES) },
             ),
+            tool = tool,
+            setTool = { t -> toolReturn = null; tool = t },
+            closeTool = ::closeTool,
         )
     }
     }
 }
 
-private enum class Overlay { FADERS, PEAKS, CONSOLE, SWEEP, COMPARE, HEARING, FINDER, REFINE, SHAPES, CURVES, WELCOME }
+private enum class Overlay { FADERS, FINDER, WELCOME }
 
 /** Opens each full screen; passed down, since the screens are chosen above the app's own content. */
 private class OverlayOpeners(
@@ -495,6 +488,9 @@ private fun AppScreen(
     snackbar: SnackbarHostState,
     onSetEnabled: (Boolean) -> Unit,
     open: OverlayOpeners,
+    tool: StudioTool?,
+    setTool: (StudioTool?) -> Unit,
+    closeTool: () -> Unit,
 ) {
     AnalyserEffect(state.analyser)
     // Effects live in Tune's right-hand panels, so anything asking for that page goes to Tune.
@@ -534,9 +530,12 @@ private fun AppScreen(
         Column(Modifier.fillMaxSize().background(Palette.Bar)) {
             StudioTopBar(state, status, module, goTo, onSetEnabled)
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                if (module == Tab.EQ) {
-                    TuneWorkspace(state, scrolls)
-                } else {
+                when (module) {
+                    Tab.EQ -> TuneWorkspace(state, scrolls)
+                    Tab.TOOLS -> ToolsWorkspace(tool, setTool, closeTool, onSetEnabled)
+                    Tab.PRESETS -> PresetsWorkspace(state, scrolls) { goTo(Tab.EQ) }
+                    Tab.HEADPHONES -> DevicesWorkspace(state, scrolls)
+                    else ->
                     ModulePage(state, status, module, scrolls.getValue(module))
                 }
                 SaveBarsAndNotices(state, snackbar)
@@ -566,8 +565,8 @@ private fun StudioTopBar(state: AppState, status: EngineStatus, module: Tab, goT
         val savedVersion = Repo.allPresets(state).firstOrNull { it.id == state.current.id }
         val deviceSaved by Repo.deviceSaved.collectAsStateWithLifecycle()
         Row(Modifier.padding(start = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            // On Tune the canvas toolbar shows the preset's unsaved changes beside its name.
-            if (module != Tab.EQ && savedVersion != null && savedVersion != state.current) UnsavedBar(state, savedVersion, inline = true)
+            // In one place in every module, where there's room for it, rather than crowding the canvas toolbar.
+            if (savedVersion != null && savedVersion != state.current) UnsavedBar(state, savedVersion, inline = true)
             deviceSaved?.let { DeviceUnsavedBar(state, it, inline = true) }
         }
         Spacer(Modifier.weight(1f))
@@ -624,8 +623,8 @@ private fun Modifier.toggleableRow(value: Boolean, onChange: (Boolean) -> Unit):
 
 /** A column of panels down one side, as a studio's left and right panel tracks. */
 @Composable
-private fun PanelTrack(width: androidx.compose.ui.unit.Dp, scroll: ScrollState, content: @Composable () -> Unit) {
-    Box(Modifier.width(width).fillMaxHeight().background(Palette.Bar)) {
+private fun PanelTrack(width: androidx.compose.ui.unit.Dp, scroll: ScrollState, background: Color = Palette.Bar, content: @Composable () -> Unit) {
+    Box(Modifier.width(width).fillMaxHeight().background(background)) {
         CompositionLocalProvider(LocalPageWidth provides width) {
             Column(
                 Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = 24.dp),
@@ -645,18 +644,37 @@ private fun TuneWorkspace(state: AppState, scrolls: Map<Tab, ScrollState>) {
     val leftScroll = rememberScrollState()
     Row(Modifier.fillMaxSize()) {
         // The presets take the height the history leaves, and scroll within it, so the track has no empty end.
-        Column(Modifier.width(LEFT_PANEL_DP.dp).fillMaxHeight().background(Palette.Bar), verticalArrangement = Arrangement.spacedBy(PANEL_GAP_DP.dp)) {
-            CompositionLocalProvider(LocalPageWidth provides LEFT_PANEL_DP.dp) {
-                Box(Modifier.weight(1f).fillMaxWidth().background(Palette.Surface)) {
-                    Column(Modifier.fillMaxSize().verticalScroll(leftScroll), verticalArrangement = Arrangement.spacedBy(PANEL_GAP_DP.dp)) {
-                        PresetListSection(state)
+        // The presets take only the height they need (and scroll past it), and History the rest, so folding a
+        // preset group hands its room to History rather than leaving an empty panel behind.
+        CompositionLocalProvider(LocalPageWidth provides LEFT_PANEL_DP.dp) {
+            androidx.compose.ui.layout.SubcomposeLayout(Modifier.width(LEFT_PANEL_DP.dp).fillMaxHeight().background(Palette.Bar)) { c ->
+                val gap = PANEL_GAP_DP.dp.roundToPx()
+                val historyMin = History.HISTORY_MIN_DP.dp.roundToPx()
+                val loose = c.copy(minHeight = 0)
+                val presets = subcompose("presets") {
+                    Box(Modifier.fillMaxWidth()) {
+                        Column(Modifier.fillMaxWidth().verticalScroll(leftScroll), verticalArrangement = Arrangement.spacedBy(PANEL_GAP_DP.dp)) {
+                            PresetListSection(state)
+                        }
+                        if (leftScroll.maxValue > 0) {
+                            androidx.compose.foundation.VerticalScrollbar(
+                                adapter = androidx.compose.foundation.rememberScrollbarAdapter(leftScroll),
+                                modifier = Modifier.align(Alignment.CenterEnd).matchParentSize(),
+                            )
+                        }
                     }
-                    androidx.compose.foundation.VerticalScrollbar(
-                        adapter = androidx.compose.foundation.rememberScrollbarAdapter(leftScroll),
-                        modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-                    )
+                }.map { it.measure(loose.copy(maxHeight = (c.maxHeight - historyMin - gap).coerceAtLeast(0))) }
+                val top = presets.maxOfOrNull { it.height } ?: 0
+                val rest = (c.maxHeight - top - gap).coerceAtLeast(0)
+                val history = subcompose("history") {
+                    Box(Modifier.fillMaxSize().background(Palette.Surface)) {
+                        History.Panel(listMax = (rest.toDp() - History.HISTORY_CHROME_DP.dp).coerceAtLeast(40.dp))
+                    }
+                }.map { it.measure(c.copy(minHeight = rest, maxHeight = rest)) }
+                layout(c.maxWidth, c.maxHeight) {
+                    presets.forEach { it.place(0, 0) }
+                    history.forEach { it.place(0, top + gap) }
                 }
-                History.Panel()
             }
         }
         Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.Line))
@@ -1866,11 +1884,15 @@ private fun ThemeColourRow(state: AppState) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // No choice means Windows' own accent colour, so it has a swatch of its own, and blue is just blue.
+            val windowsAccent = io.github.dragjon.eigentone.platform.WindowsTheme.accent
+            if (windowsAccent != null) {
+                ColourSwatch(Color(windowsAccent.toInt()), stringResource(Res.string.win_colour_windows), selected = seed == null, wallpaper = true) { pick(null) }
+            }
             SeedScheme.SWATCHES.forEachIndexed { i, colour ->
-                // Before Android 12 the blue stands for the default, so choosing it clears the choice.
-                val chosen = seed == colour || (!wallpaperAvailable && seed == null && colour == SeedScheme.DEFAULT_SEED)
+                val chosen = seed == colour || (windowsAccent == null && seed == null && colour == SeedScheme.DEFAULT_SEED)
                 ColourSwatch(Color(colour.toInt()), stringResource(names[i]), selected = chosen) {
-                    pick(if (!wallpaperAvailable && colour == SeedScheme.DEFAULT_SEED) null else colour)
+                    pick(if (windowsAccent == null && colour == SeedScheme.DEFAULT_SEED) null else colour)
                 }
             }
             ColourSwatch(Color(SeedScheme.fromHue(hue).toInt()), stringResource(Res.string.ui_colour_custom), selected = custom, rainbow = true) {
@@ -1910,14 +1932,14 @@ private fun ThemeColourRow(state: AppState) {
 private fun ColourSwatch(colour: Color, name: String, selected: Boolean, wallpaper: Boolean = false, rainbow: Boolean = false, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(44.dp)
+            .size(30.dp)
             .clip(androidx.compose.foundation.shape.CircleShape)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .semantics { contentDescription = name },
         contentAlignment = Alignment.Center,
     ) {
-        androidx.compose.foundation.Canvas(Modifier.size(40.dp)) {
-            val ring = 2.5.dp.toPx()
+        androidx.compose.foundation.Canvas(Modifier.size(28.dp)) {
+            val ring = 2.dp.toPx()
             if (selected) drawCircle(Palette.Text, radius = size.minDimension / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(ring))
             val inner = size.minDimension / 2 - ring * 2
             if (rainbow) {
@@ -4100,7 +4122,7 @@ private object History {
     }
 
     @Composable
-    fun Panel() {
+    fun Panel(listMax: androidx.compose.ui.unit.Dp = HISTORY_MAX_DP.dp) {
         SettingsSection(stringResource(Res.string.win_panel_history)) {
             if (steps.size <= 1) {
                 Text(
@@ -4113,7 +4135,7 @@ private object History {
             val time = remember { java.time.format.DateTimeFormatter.ofPattern("HH:mm") }
             // Scrolls within the panel once it's long, so the panels below stay where they are.
             val list = rememberScrollState()
-            Box(Modifier.fillMaxWidth().heightIn(max = HISTORY_MAX_DP.dp)) {
+            Box(Modifier.fillMaxWidth().heightIn(max = listMax)) {
                 Column(Modifier.fillMaxWidth().verticalScroll(list)) {
                     steps.forEachIndexed { i, step ->
                         androidx.compose.runtime.key(System.identityHashCode(step)) {
@@ -4154,7 +4176,7 @@ private object History {
                 if (list.maxValue > 0) {
                     androidx.compose.foundation.VerticalScrollbar(
                         adapter = androidx.compose.foundation.rememberScrollbarAdapter(list),
-                        modifier = Modifier.align(Alignment.CenterEnd).height(HISTORY_MAX_DP.dp),
+                        modifier = Modifier.align(Alignment.CenterEnd).matchParentSize(),
                     )
                 }
             }
@@ -4162,6 +4184,9 @@ private object History {
     }
 
     private const val HISTORY_MAX_DP = 260
+    /** Room History keeps however long the preset list is, and what its heading and note take of it. */
+    const val HISTORY_MIN_DP = 150
+    const val HISTORY_CHROME_DP = 80
 }
 
 /**
@@ -4175,10 +4200,7 @@ private fun CanvasToolbar(state: AppState, inGraphic: Boolean, showParametric: B
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        val savedVersion = Repo.allPresets(state).firstOrNull { it.id == state.current.id }
-        Text(state.current.name, style = MaterialTheme.typography.titleSmall, color = Palette.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
-        if (savedVersion != null && savedVersion != state.current) UnsavedBar(state, savedVersion, inline = true)
-        Spacer(Modifier.weight(1f))
+        Text(state.current.name, style = MaterialTheme.typography.titleSmall, color = Palette.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (showParametric) {
             SlidingToggle(
                 options = listOf(ToggleOption(stringResource(Res.string.ui_graphic)), ToggleOption(stringResource(Res.string.ui_parametric))),
@@ -4202,3 +4224,230 @@ private fun CanvasToolbar(state: AppState, inGraphic: Boolean, showParametric: B
 }
 
 private const val CANVAS_TOOLBAR_DP = 40
+
+/** The tools, which open in the Tools module's pane. */
+enum class StudioTool { FINDER, REFINE, HEARING, PEAKS, SWEEP, COMPARE, CURVES, SHAPES, CONSOLE }
+
+/** One tool in the list: [tool] is null for one that opens a dialog of its own instead, such as the microphone. */
+private class ToolEntry(val tool: StudioTool?, val title: StringResource, val detail: StringResource, val tip: Tip)
+
+private val TOOL_GROUPS: List<Pair<StringResource, List<ToolEntry>>> by lazy {
+    listOf(
+        Res.string.win_tools_fit to listOf(
+            ToolEntry(StudioTool.FINDER, Res.string.ui_find_my_sound, Res.string.ui_a_short_guided_listening_test, Help.finder),
+            ToolEntry(StudioTool.REFINE, Res.string.ui_refine, Res.string.ui_refine_detail, Help.refine),
+            ToolEntry(StudioTool.HEARING, Res.string.ui_hearing_check, Res.string.ui_builds_a_curve_for_how_you_hear, Help.hearing),
+        ),
+        Res.string.win_tools_problems to listOf(
+            ToolEntry(StudioTool.PEAKS, Res.string.ui_find_peaks_for_me, Res.string.ui_a_guided_test_that_finds_peaks_and_dips, Help.peakFinder),
+            ToolEntry(StudioTool.SWEEP, Res.string.ui_frequency_sweep, Res.string.ui_find_and_fix_peaks_in_your_headphones_by, Help.sweep),
+            ToolEntry(null, Res.string.ui_measure_action, Res.string.ui_measure_action_detail, Help.measure),
+        ),
+        Res.string.win_tools_compare to listOf(
+            ToolEntry(StudioTool.COMPARE, Res.string.ui_compare_two_sounds, Res.string.ui_switch_instantly_with_an_optional_blind, Help.compare),
+            ToolEntry(StudioTool.CURVES, Res.string.ui_compare_curves, Res.string.ui_compare_curves_detail, Help.compareCurves),
+        ),
+        Res.string.win_tools_shapes to listOf(
+            ToolEntry(StudioTool.SHAPES, Res.string.help_shape_library_title, Res.string.win_tools_shapes_detail, Help.shapeLibrary),
+        ),
+        Res.string.win_tools_trouble to listOf(
+            ToolEntry(StudioTool.CONSOLE, Res.string.ui_debug_console, Res.string.ui_debug_console_detail, Help.console),
+        ),
+    )
+}
+
+/**
+ * Tools: the list down the left, and the open tool beside it, as a studio opens a tool in its main pane. With none
+ * open, the pane shows every tool as a tile with what it's for.
+ */
+@Composable
+private fun ToolsWorkspace(tool: StudioTool?, setTool: (StudioTool?) -> Unit, closeTool: () -> Unit, onSetEnabled: (Boolean) -> Unit) {
+    val output by Repo.output.collectAsStateWithLifecycle()
+    var measuring by remember { mutableStateOf(false) }
+    fun choose(e: ToolEntry) {
+        if (e.tool == null) measuring = true else setTool(e.tool)
+    }
+    Row(Modifier.fillMaxSize()) {
+        PanelTrack(TOOL_RAIL_DP.dp, rememberScrollState(), background = Palette.Surface) {
+            TOOL_GROUPS.forEach { (group, entries) ->
+                SettingsSection(stringResource(group)) {
+                    entries.forEach { e -> ToolRow(e, selected = e.tool != null && e.tool == tool) { choose(e) } }
+                }
+            }
+        }
+        Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.Line))
+        Box(Modifier.weight(1f).fillMaxHeight().background(Palette.Background)) {
+            when (tool) {
+                null -> ToolOverview(::choose)
+                StudioTool.FINDER -> FinderScreen(onSetEnabled = onSetEnabled, onClose = closeTool)
+                StudioTool.REFINE -> RefineScreen(onSetEnabled = onSetEnabled, onClose = closeTool)
+                StudioTool.HEARING -> HearingScreen(onClose = closeTool)
+                StudioTool.PEAKS -> PeakFinderScreen(onClose = closeTool)
+                StudioTool.SWEEP -> SweepScreen(onClose = closeTool)
+                StudioTool.COMPARE -> CompareScreen(onSetEnabled = onSetEnabled, onClose = closeTool)
+                StudioTool.CURVES -> CurveCompareScreen(onClose = closeTool)
+                StudioTool.SHAPES -> ShapeBrowser(onClose = closeTool)
+                StudioTool.CONSOLE -> DebugConsoleScreen(onClose = closeTool)
+            }
+        }
+    }
+    if (measuring) {
+        val snackbar = LocalSnackbar.current
+        val scope = LocalSnackScope.current
+        RoomMeasureDialog(output, onDismiss = { measuring = false }) { name ->
+            measuring = false
+            scope.notify(snackbar, appText(Res.string.ui_added, name))
+        }
+    }
+}
+
+@Composable
+private fun ToolRow(entry: ToolEntry, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(if (selected) Palette.SurfaceHigh else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(end = 12.dp, top = 5.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.width(3.dp).height(30.dp).background(if (selected) Palette.Lit else Color.Transparent))
+        Column(Modifier.padding(start = 9.dp).weight(1f)) {
+            Text(stringResource(entry.title), style = MaterialTheme.typography.bodyMedium, color = Palette.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(entry.detail), style = MaterialTheme.typography.bodySmall, color = Palette.TextDim, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** Every tool but the console as a tile, the tiles sharing the pane between them so it's filled at any size. */
+@Composable
+private fun ToolOverview(onChoose: (ToolEntry) -> Unit) {
+    val tiles = TOOL_GROUPS.flatMap { (group, entries) -> entries.filter { it.tool != StudioTool.CONSOLE }.map { group to it } }
+    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        tiles.chunked(TOOL_TILE_COLUMNS).forEach { row ->
+            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                row.forEach { (group, entry) ->
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(PanelShape)
+                            .background(Palette.Surface)
+                            .clickable { onChoose(entry) }
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(stringResource(group).uppercase(), style = MaterialTheme.typography.labelSmall, color = Palette.TextDim, letterSpacing = androidx.compose.ui.unit.TextUnit(1f, androidx.compose.ui.unit.TextUnitType.Sp))
+                        Text(stringResource(entry.title), style = MaterialTheme.typography.titleMedium, color = Palette.Text)
+                        Text(stringResource(entry.detail), style = MaterialTheme.typography.bodySmall, color = Palette.Text)
+                        Text(
+                            stringResource(entry.tip.body),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Palette.TextDim,
+                            // Whole lines only, so a long explanation ends in an ellipsis rather than a cut line.
+                            maxLines = TOOL_TIP_LINES,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(stringResource(Res.string.win_tools_open), style = MaterialTheme.typography.bodyMedium, color = Palette.Lit)
+                    }
+                }
+                repeat(TOOL_TILE_COLUMNS - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** Presets: the library down the left, the sound in use drawn large in the middle, and what to do with it on the right. */
+@Composable
+private fun PresetsWorkspace(state: AppState, scrolls: Map<Tab, ScrollState>, openTune: () -> Unit) {
+    val output by Repo.output.collectAsStateWithLifecycle()
+    Row(Modifier.fillMaxSize()) {
+        PanelTrack(LEFT_PANEL_DP.dp, scrolls.getValue(Tab.PRESETS), background = Palette.Surface) { PresetListSection(state) }
+        Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.Line))
+        CurvePane(
+            state,
+            output.key,
+            title = state.current.name,
+            subtitle = stringResource(Res.string.win_curve_on, output.label),
+            modifier = Modifier.weight(1f),
+        ) {
+            FilledTonalButton(onClick = openTune) { Text(stringResource(Res.string.win_edit_in_tune)) }
+        }
+        Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.Line))
+        PanelTrack(RIGHT_PANEL_DP.dp, rememberScrollState(), background = Palette.Surface) {
+            if (Disclosure.perApp(state)) PerAppSection(state)
+            ManageSection(state)
+        }
+    }
+}
+
+/** Devices: the output's own settings down the left, and everything that plays on it drawn large beside them. */
+@Composable
+private fun DevicesWorkspace(state: AppState, scrolls: Map<Tab, ScrollState>) {
+    val output by Repo.output.collectAsStateWithLifecycle()
+    Row(Modifier.fillMaxSize()) {
+        PanelTrack(DEVICE_PANEL_DP.dp, scrolls.getValue(Tab.HEADPHONES), background = Palette.Surface) {
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(PANEL_GAP_DP.dp)) { HeadphonesTab(state) }
+        }
+        Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.Line))
+        CurvePane(
+            state,
+            output.key,
+            title = output.label,
+            subtitle = stringResource(Res.string.win_device_curve, state.current.name),
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** A sound's whole curve as it plays on an output, filling the pane: a heading, the graph, and room for actions. */
+@Composable
+private fun CurvePane(
+    state: AppState,
+    outputKey: String,
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    actions: @Composable () -> Unit = {},
+) {
+    Column(modifier.fillMaxHeight().background(Palette.Background).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleLarge, color = Palette.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Palette.TextDim, maxLines = 2)
+            }
+            actions()
+        }
+        androidx.compose.foundation.layout.BoxWithConstraints(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clip(PanelShape)
+                .background(Palette.Surface)
+                .padding(GRAPH_INSET_DP.dp),
+        ) {
+            val height = maxHeight
+            val curve = remember(state.current, state.bypass, state.loudness, state.earCorrections, outputKey) {
+                Processing.effectiveFilters(state, 0.0, outputKey)
+            }
+            EqGraph(
+                filters = emptyList(),
+                curveFilters = curve,
+                spectrum = { null },
+                selectedId = null,
+                dimmed = !state.enabled || state.bypass,
+                onSelect = {},
+                onDrag = { _, _, _ -> },
+                onDragEnd = {},
+                height = { height },
+                morphKey = state.current.id,
+            )
+        }
+    }
+}
+
+private const val TOOL_RAIL_DP = 300
+private const val TOOL_TILE_COLUMNS = 3
+private const val TOOL_TIP_LINES = 6
+private const val DEVICE_PANEL_DP = 420

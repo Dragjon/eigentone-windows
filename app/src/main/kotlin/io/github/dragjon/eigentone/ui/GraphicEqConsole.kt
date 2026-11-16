@@ -295,7 +295,8 @@ fun GraphicEqConsole(tone: Tone, presetId: String, onBrowseShapes: () -> Unit, o
             saved = FaderLayer.shown(base, savedFaders(appState, presetId, bands)),
             area = Modifier.tourTarget(TourStop.FADERS),
             smooth = appState.faderMode == FaderMode.SMOOTH,
-            scrollable = appState.faderView == FaderView.SCROLL,
+            // On the studio's canvas there's room for every fader, even 31, so they always fit the width.
+            scrollable = !canvas && appState.faderView == FaderView.SCROLL,
             shown = rememberMorphed(faders.toDoubleArray(), presetId to tone.shape?.name),
             selected = selected,
             onSelect = { selected = it },
@@ -305,7 +306,8 @@ fun GraphicEqConsole(tone: Tone, presetId: String, onBrowseShapes: () -> Unit, o
             onFinished = Repo::commit,
         )
 
-        Row(
+        // The band seeker is for a phone's narrow screen; on the canvas a fader is picked and dragged directly.
+        if (!canvas) Row(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp),
@@ -439,15 +441,7 @@ fun FaderOptions(onExpand: () -> Unit) {
             selected = FaderMode.entries.indexOf(appState.faderMode),
             onSelect = { i -> Repo.update { it.copy(faderMode = FaderMode.entries[i]) } },
         )
-        IconPill(
-            options = listOf(
-                Res.drawable.ic_view_scroll to stringResource(Res.string.ui_fader_view_scroll),
-                Res.drawable.ic_view_fit to stringResource(Res.string.ui_fader_view_full),
-            ),
-            selected = FaderView.entries.indexOf(appState.faderView),
-            onSelect = { i -> Repo.update { it.copy(faderView = FaderView.entries[i]) } },
-        )
-        LandscapeButton(onExpand)
+        // No scroll-or-fit view or full screen here: the canvas fits every fader already.
     }
 }
 

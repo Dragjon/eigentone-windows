@@ -33,4 +33,9 @@
     <string name="win_film_favourites">Favourites</string>
     <string name="win_film_mine">Mine</string>
     <string name="win_film_count">%1$d presets</string>
+    <string name="win_colour_windows">Windows accent</string>
+    <string name="win_tools_open">Open</string>
+    <string name="win_curve_on">The whole sound as it plays on %1$s</string>
+    <string name="win_edit_in_tune">Edit in Tune</string>
+    <string name="win_device_curve">What plays on this output: %1$s, with this output's correction and your ears</string>
 </resources>
