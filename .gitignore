@@ -12,3 +12,4 @@ local.properties
 
 # Local editor settings, with paths on this PC
 .clangd
+.kotlin/

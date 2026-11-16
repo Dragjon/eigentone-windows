@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text only the Windows app needs. The rest comes from the Android app's files, unchanged. -->
+<resources>
+    <string name="win_tab_tools">Tools</string>
+    <string name="win_tools_fit">Fit it to you</string>
+    <string name="win_tools_problems">Find problems by ear</string>
+    <string name="win_tools_compare">Compare</string>
+    <string name="win_tools_shapes">Shapes</string>
+    <string name="win_tools_shapes_detail">Browse 350 curves by genre, instrument, situation or problem, and hear each on your music</string>
+    <string name="win_tools_trouble">Troubleshooting</string>
+    <string name="win_off_title">Eigentone is off</string>
+    <string name="win_off_body">Your sound plays unchanged, so the equaliser and effects can be set but won't be heard.</string>
+    <string name="win_turn_on">Turn on</string>
+    <string name="win_on">On</string>
+    <string name="win_off">Off</string>
+    <string name="win_status_no_engine">Background service not running</string>
+    <string name="win_status_idle">Ready, waiting for sound</string>
+    <string name="win_status_engine">%1$s kHz · %2$s ms delay</string>
+    <string name="win_status_nothing_playing">Nothing playing</string>
+    <string name="win_nav_expand">Open navigation</string>
+    <string name="win_nav_collapse">Close navigation</string>
+    <string name="win_unsaved">Unsaved changes</string>
+    <string name="win_unsaved_device">Unsaved changes for %1$s</string>
+    <string name="win_module_tune">Tune</string>
+    <string name="win_module_devices">Devices</string>
+    <string name="win_panel_output">Output</string>
+    <string name="win_panel_history">History</string>
+    <string name="win_history_empty">Changes you make appear here. Click one to go back to it.</string>
+    <string name="win_history_start">Started with %1$s</string>
+    <string name="win_history_loaded">Loaded %1$s</string>
+    <string name="win_history_edit">%1$s</string>
+    <string name="win_film_all">All</string>
+    <string name="win_film_favourites">Favourites</string>
+    <string name="win_film_mine">Mine</string>
+    <string name="win_film_count">%1$d presets</string>
+</resources>

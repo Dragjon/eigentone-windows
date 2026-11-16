@@ -1,0 +1,359 @@
+package io.github.dragjon.eigentone.ui
+
+import org.jetbrains.compose.resources.*
+
+import io.github.dragjon.eigentone.resources.*
+import org.jetbrains.compose.resources.stringResource
+import io.github.dragjon.eigentone.platform.Actions
+import io.github.dragjon.eigentone.platform.Context
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.dragjon.eigentone.data.AppState
+import io.github.dragjon.eigentone.data.AutoEqCatalog
+import io.github.dragjon.eigentone.data.BuiltIns
+import io.github.dragjon.eigentone.data.HeadphoneTargets
+import io.github.dragjon.eigentone.data.CrashLog
+import io.github.dragjon.eigentone.data.EngineStatus
+import io.github.dragjon.eigentone.data.OutputInfo
+import io.github.dragjon.eigentone.data.Profiles
+import io.github.dragjon.eigentone.data.Repo
+import io.github.dragjon.eigentone.data.ShareCode
+import io.github.dragjon.eigentone.dsp.AutoEqParser
+import io.github.dragjon.eigentone.engine.MediaWatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private const val EARBUD_EQ_PROMPT = "earbud-eq"
+private fun correctionPrompt(outputKey: String) = "correction:$outputKey"
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PromptCard(title: String, body: String, problem: String? = null, actions: @Composable () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(PanelShape)
+            .background(Palette.SurfaceHigh)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = Palette.Text)
+        Text(body, style = MaterialTheme.typography.bodyMedium, color = Palette.TextDim)
+        problem?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Palette.Danger) }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { actions() }
+    }
+}
+
+/**
+ * Offers help that depends on what's connected, one card at a time: a correction for these headphones,
+ * then a reminder about EQ built into the headphones themselves.
+ */
+@Composable
+fun OutputPrompts(state: AppState) {
+    val output by Repo.output.collectAsStateWithLifecycle()
+    // Held here rather than in the card: picking a target changes the sound, which stops the card being
+    // offered, and the tuner must stay open through that.
+    var tuning by rememberSaveable { mutableStateOf(false) }
+    if (tuning) {
+        CorrectionTuner(onDismiss = {
+            tuning = false
+            // Once the targets have been compared, the card has done its job.
+            Repo.dismissPrompt(targetPrompt(output.key))
+        })
+    }
+    if (!state.enabled || !Profiles.supportsModes(output.key)) return
+    val needsCorrection = correctionPrompt(output.key) !in state.dismissedPrompts &&
+        Profiles.presetIdFor(state, output.key) == null &&
+        !state.current.filters.any { it.gainDb != 0.0 } && state.current.tone.importedCurve.isEmpty()
+    when {
+        needsCorrection -> CorrectionPrompt(output)
+        targetPrompt(output.key) !in state.dismissedPrompts &&
+            HeadphoneTargets.worthSuggesting(state.current.tone, state.current.id) && !tuning -> TargetPrompt(output) { tuning = true }
+        output.key.startsWith("Bluetooth") && EARBUD_EQ_PROMPT !in state.dismissedPrompts -> {
+            PromptCard(
+                stringResource(Res.string.ui_your_headphones_may_have_their_own_eq),
+                stringResource(Res.string.ui_eq_in_a_headphone_app_such),
+            ) {
+                Button(onClick = { Repo.dismissPrompt(EARBUD_EQ_PROMPT) }) { Text(stringResource(Res.string.ui_got_it)) }
+            }
+        }
+    }
+}
+
+/** Corrections are applied as published, so this says when that leaves far less bass than most people prefer. */
+@Composable
+private fun TargetPrompt(output: OutputInfo, onTune: () -> Unit) {
+    PromptCard(stringResource(Res.string.ui_target_prompt_title), stringResource(Res.string.ui_target_prompt_body)) {
+        Button(onClick = onTune) { Text(stringResource(Res.string.ui_target_prompt_action)) }
+        TextButton(onClick = { Repo.dismissPrompt(targetPrompt(output.key)) }) { Text(stringResource(Res.string.ui_not_now)) }
+    }
+}
+
+private fun targetPrompt(outputKey: String) = "target:$outputKey"
+
+@Composable
+private fun CorrectionPrompt(output: OutputInfo) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    var searching by remember { mutableStateOf(false) }
+    val builtIn = BuiltIns.correctionFor(output.key)
+
+    fun useCorrection() {
+        busy = true
+        problem = null
+        scope.launch {
+            val found = withContext(Dispatchers.IO) {
+                runCatching {
+                    val entries = AutoEqCatalog.loadIndex(context.cacheDir)
+                    val entry = AutoEqCatalog.bestMatch(entries, output.label) ?: return@runCatching null
+                    val parsed = AutoEqParser.parse(AutoEqCatalog.loadProfile(entry)) ?: return@runCatching null
+                    Triple(entry, parsed, AutoEqCatalog.loadCorrectionInfo(entry))
+                }
+            }
+            busy = false
+            found.fold(
+                onSuccess = { match ->
+                    if (match == null) {
+                        searching = true
+                    } else {
+                        Repo.importPreset(match.first.title, match.second, match.third)
+                        Repo.assignToOutput(output.key, Repo.state.value.current.id)
+                    }
+                },
+                onFailure = { problem = appText(Res.string.ui_couldn_t_get_the_headphone_list) },
+            )
+        }
+    }
+
+    PromptCard(
+        stringResource(Res.string.ui_correct, output.label),
+        stringResource(Res.string.ui_a_correction_evens_out_these_headphones),
+        problem = problem,
+    ) {
+        Button(
+            enabled = !busy,
+            onClick = {
+                if (builtIn != null) {
+                    Repo.loadPreset(builtIn)
+                    Repo.assignToOutput(output.key, builtIn.id)
+                } else {
+                    useCorrection()
+                }
+            },
+        ) { Text(if (busy) stringResource(Res.string.ui_looking) else stringResource(Res.string.ui_find_a_correction)) }
+        TextButton(enabled = !busy, onClick = { Repo.dismissPrompt(correctionPrompt(output.key)) }) { Text(stringResource(Res.string.ui_not_now)) }
+    }
+    if (searching) {
+        AutoEqDialog(onDismiss = { searching = false }) {
+            searching = false
+            Repo.assignToOutput(output.key, Repo.state.value.current.id)
+        }
+    }
+}
+
+/** Sharing, and adding a sound someone else shared. */
+@Composable
+fun ShareRows(snack: (String) -> Unit) {
+    val context = LocalContext.current
+    var pasting by remember { mutableStateOf(false) }
+    RowDivider()
+    ActionRow(stringResource(Res.string.ui_share_this_sound), Help.share) {
+        // Windows has no share sheet for text, so the code goes to the clipboard, ready to paste anywhere.
+        val preset = Repo.state.value.current
+        Actions.copy(ShareCode.encode(preset))
+        snack(appText(Res.string.ui_copied))
+    }
+    RowDivider()
+    ActionRow(stringResource(Res.string.ui_add_a_shared_sound), Help.addShared) { pasting = true }
+    if (pasting) {
+        var code by remember { mutableStateOf("") }
+        var failed by remember { mutableStateOf(false) }
+        MotionDialog(
+            onDismissRequest = { pasting = false },
+            containerColor = Palette.Tooltip,
+            title = { Text(stringResource(Res.string.ui_add_a_shared_sound)) },
+            text = {
+                OutlinedTextField(colors = fieldColors(), 
+                    value = code,
+                    onValueChange = {
+                        code = it
+                        failed = false
+                    },
+                    label = { Text(stringResource(Res.string.ui_share_code)) },
+                    isError = failed,
+                    supportingText = if (failed) ({ Text(stringResource(Res.string.ui_that_isn_t_a_valid_share_code)) }) else null,
+                    maxLines = 5,
+                )
+            },
+            confirmButton = {
+                TextButton(enabled = code.isNotBlank(), onClick = {
+                    if (Repo.importShareCode(code)) {
+                        pasting = false
+                        snack(appText(Res.string.ui_added, Repo.state.value.current.name))
+                    } else {
+                        failed = true
+                    }
+                }) { Text(stringResource(Res.string.ui_add)) }
+            },
+            dismissButton = { TextButton(onClick = { pasting = false }) { Text(stringResource(Res.string.ui_cancel)) } },
+        )
+    }
+}
+
+/** On Windows an app is known by its program's name, which is already readable. */
+fun appLabel(@Suppress("UNUSED_PARAMETER") context: Context, packageName: String): String = packageName
+
+/** Lets each music or video app have its own preset. Needs access that Android treats as sensitive. */
+@Composable
+fun PerAppSection(state: AppState) {
+    // Per-app presets need Windows to say which app is playing, which arrives in a later milestone. Until
+    // then the section stays out of the way rather than describing Android's notification access.
+    if (!MediaWatcher.isAllowed(LocalContext.current)) return
+    val context = LocalContext.current
+    var allowed by remember { mutableStateOf(MediaWatcher.isAllowed(context)) }
+    LifecycleResumeEffect(Unit) {
+        allowed = MediaWatcher.isAllowed(context)
+        onPauseOrDispose { }
+    }
+    val playing by Repo.playingApp.collectAsStateWithLifecycle()
+
+    SettingsSection(stringResource(Res.string.ui_per_app_presets), trailing = { InfoButton(Help.perApp) }) {
+        if (!allowed) {
+            ActionRow(
+                stringResource(Res.string.ui_allow_per_app_presets),
+                Help.perAppAccess,
+                detail = stringResource(Res.string.ui_android_lists_this_under_notification_ac),
+            ) { }
+            return@SettingsSection
+        }
+        val app = playing
+        val canAssign = Repo.findPreset(state.current.id) != null
+        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                if (app == null) stringResource(Res.string.ui_play_something_to_set_up_its) else stringResource(Res.string.ui_last_playing, appLabel(context, app)),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Palette.Text,
+            )
+            if (app != null) {
+                FilledTonalButton(
+                    enabled = canAssign && state.appProfiles[app] != state.current.id,
+                    onClick = { Repo.assignToApp(app, state.current.id) },
+                ) { Text(stringResource(Res.string.ui_use_for_this_app, state.current.name), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            }
+        }
+        state.appProfiles.forEach { (packageName, presetId) ->
+            RowDivider()
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 32.dp)
+                    .padding(start = 16.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(appLabel(context, packageName), style = MaterialTheme.typography.bodyLarge, color = Palette.Text)
+                    Text(
+                        Repo.findPreset(presetId)?.name ?: stringResource(Res.string.ui_preset_was_deleted),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Palette.TextDim,
+                    )
+                }
+                TextButton(onClick = { Repo.assignToApp(packageName, null) }, danger = true) { Text(stringResource(Res.string.ui_clear)) }
+            }
+        }
+    }
+}
+
+/** What to send when something goes wrong, and anything else that might be interfering. */
+@Composable
+fun DiagnosticsSection(status: EngineStatus, output: OutputInfo, onConsole: () -> Unit) {
+    val context = LocalContext.current
+    var crash by remember { mutableStateOf(CrashLog.read(context)) }
+    val rivals = remember { otherEffectApps(context) }
+    var copied by remember { mutableStateOf(false) }
+    // "Copied" is a moment's confirmation, so the row goes back to saying what it does.
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(2000)
+            copied = false
+        }
+    }
+
+    SettingsSection(stringResource(Res.string.ui_troubleshooting)) {
+        if (!status.hasControl && rivals.isNotEmpty()) {
+            Text(
+                stringResource(Res.string.ui_another_audio_app_has_control_try, rivals.joinToString()),
+                style = MaterialTheme.typography.bodySmall,
+                color = Palette.Danger,
+                modifier = Modifier.padding(16.dp),
+            )
+            RowDivider()
+        }
+        ActionRow(
+            if (copied) stringResource(Res.string.ui_copied) else stringResource(Res.string.ui_copy_status_details),
+            Help.diagnostics,
+            opens = false,
+        ) {
+            val text = buildList {
+                add(CrashLog.deviceSummary(context))
+                add("Running: ${status.running}, mode: ${status.mode}, bands: ${status.bandCount}, accepted: ${status.readback ?: "not checked"}")
+                add("In control: ${status.hasControl}, repairs: ${status.rebuilds}")
+                add("Output: ${output.key}")
+                status.error?.let { add("Error: $it") }
+                status.spatialError?.let { add("Surround: $it") }
+                if (rivals.isNotEmpty()) add(appText(Res.string.ui_other_audio_effect_apps, rivals.joinToString()))
+            }.joinToString("\n")
+            Actions.copy(text)
+            copied = true
+        }
+        RowDivider()
+        ActionRow(stringResource(Res.string.ui_debug_console), Help.console, detail = stringResource(Res.string.ui_debug_console_detail), onClick = onConsole)
+        crash?.let { report ->
+            RowDivider()
+            ActionRow(stringResource(Res.string.ui_share_crash_report), Help.crashReport, detail = stringResource(Res.string.ui_eigentone_crashed_recently_nothing_is_se)) {
+                Actions.share("Eigentone crash report", report)
+            }
+            RowDivider()
+            ActionRow(stringResource(Res.string.ui_delete_crash_report), Help.crashReport, opens = false, danger = true) {
+                CrashLog.clear(context)
+                crash = null
+            }
+        }
+    }
+}
+
+/** Other equalisers that could fight Eigentone. Android lists effect panels; Windows checks for Equalizer APO. */
+private fun otherEffectApps(@Suppress("UNUSED_PARAMETER") context: Context): List<String> =
+    if (java.io.File(System.getenv("ProgramFiles") ?: "C:/Program Files", "EqualizerAPO").isDirectory) listOf("Equalizer APO") else emptyList()

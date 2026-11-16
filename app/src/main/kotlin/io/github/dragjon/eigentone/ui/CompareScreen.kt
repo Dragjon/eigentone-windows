@@ -1,0 +1,334 @@
+package io.github.dragjon.eigentone.ui
+
+import org.jetbrains.compose.resources.*
+
+import io.github.dragjon.eigentone.resources.*
+import org.jetbrains.compose.resources.stringResource
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.dragjon.eigentone.data.AbComparison
+import io.github.dragjon.eigentone.data.BuiltIns
+import io.github.dragjon.eigentone.data.Preset
+import io.github.dragjon.eigentone.data.Repo
+import kotlin.random.Random
+
+private enum class CompareStep { CHOOSE, LISTEN, REVEAL }
+
+/** Id standing for the sound in use when the screen opened, which may be unsaved. */
+private const val CURRENT = "current"
+
+/**
+ * Switches between two sounds at matched loudness, optionally without knowing which is which. It changes
+ * the live sound while it's open and puts everything back unless one is chosen, including if the screen
+ * is rebuilt, when the sound is applied again from the saved choices.
+ */
+@Composable
+fun CompareScreen(onSetEnabled: (Boolean) -> Unit, onClose: () -> Unit) {
+    val state by Repo.state.collectAsStateWithLifecycle()
+    val before = remember { Repo.state.value }
+    var finished by remember { mutableStateOf(false) }
+
+    var step by rememberSaveable { mutableStateOf(CompareStep.CHOOSE) }
+    var firstId by rememberSaveable { mutableStateOf(CURRENT) }
+    var secondId by rememberSaveable { mutableStateOf<String?>(null) }
+    var choosingFirst by rememberSaveable { mutableStateOf(false) }
+    var blind by rememberSaveable { mutableStateOf(false) }
+    var flipped by rememberSaveable { mutableStateOf(false) }
+    var playing by rememberSaveable { mutableIntStateOf(0) }
+    var preferred by rememberSaveable { mutableIntStateOf(0) }
+
+    fun find(id: String?): Preset? = if (id == CURRENT) before.current else id?.let(Repo::findPreset)
+    val first = find(firstId)
+    val second = find(secondId)
+    val comparison = if (first != null && second != null) AbComparison(first, second, blind, flipped, before.current) else null
+
+    DisposableEffect(Unit) {
+        Repo.comparing.value = true
+        onDispose {
+            Repo.comparing.value = false
+            if (!finished) Repo.update { it.copy(current = before.current, bypass = before.bypass) }
+        }
+    }
+
+    LaunchedEffect(step, playing, comparison, state.autoHeadroom) {
+        if (step == CompareStep.CHOOSE || comparison == null) return@LaunchedEffect
+        val sound = comparison.soundFor(playing, state.autoHeadroom)
+        Repo.update { it.copy(current = sound, bypass = false) }
+    }
+
+    fun cancel() {
+        onClose()
+    }
+
+    /** Leaves the chosen sound in place as one undo step, without the comparison's level change. */
+    fun use(preset: Preset) {
+        finished = true
+        Repo.update { it.copy(current = before.current, bypass = before.bypass) }
+        if (preset != before.current) {
+            Repo.loadPreset(preset)
+            // What was heard is what's kept, even when that preset also has edits waiting from earlier.
+            if (Repo.state.value.current != preset) {
+                Repo.edit { preset }
+                Repo.commit()
+            }
+        }
+        onClose()
+    }
+
+    /** Back from listening returns to choosing, with the sound that was in use playing again meanwhile. */
+    fun back() {
+        if (step == CompareStep.CHOOSE) {
+            cancel()
+        } else {
+            step = CompareStep.CHOOSE
+            Repo.update { it.copy(current = before.current, bypass = before.bypass) }
+        }
+    }
+
+    BackHandler(onBack = ::back)
+
+    ToolScreen(title = stringResource(Res.string.ui_compare_two_sounds), onBack = ::back, spacing = 16.dp) {
+        // Each step slides in as the last one leaves.
+        ToolSteps(step) { shown ->
+        when (shown) {
+            CompareStep.CHOOSE -> Choose(
+                current = before.current,
+                firstId = firstId,
+                secondId = secondId,
+                choosingFirst = choosingFirst,
+                blind = blind,
+                onChooseSlot = { choosingFirst = it },
+                onPick = { id ->
+                    if (choosingFirst) {
+                        firstId = id
+                        choosingFirst = false
+                    } else {
+                        secondId = id
+                    }
+                },
+                onBlind = { blind = it },
+                canStart = comparison != null && first != second,
+                onStart = {
+                    // Comparing with the EQ off would play the same sound twice.
+                    if (!state.enabled) onSetEnabled(true)
+                    flipped = Random.nextBoolean()
+                    playing = 0
+                    step = CompareStep.LISTEN
+                },
+                onCancel = ::cancel,
+            )
+            CompareStep.LISTEN -> comparison?.let { active ->
+                Listen(
+                    comparison = active,
+                    playing = playing,
+                    silent = !state.enabled,
+                    onPlay = { playing = it },
+                    onPrefer = { button ->
+                        if (active.blind) {
+                            preferred = button
+                            playing = button
+                            step = CompareStep.REVEAL
+                        } else {
+                            use(active.presetFor(button))
+                        }
+                    },
+                    onCancel = ::cancel,
+                )
+            }
+            CompareStep.REVEAL -> comparison?.let { active ->
+                Reveal(
+                    chosen = active.nameOf(active.presetFor(preferred)),
+                    other = active.nameOf(active.presetFor(1 - preferred)),
+                    wasCurrent = active.presetFor(preferred) == before.current,
+                    onUse = { use(active.presetFor(preferred)) },
+                    onCancel = ::cancel,
+                )
+            }
+        }
+        }
+    }
+}
+
+@Composable
+private fun Choose(
+    current: Preset,
+    firstId: String,
+    secondId: String?,
+    choosingFirst: Boolean,
+    blind: Boolean,
+    onChooseSlot: (Boolean) -> Unit,
+    onPick: (String) -> Unit,
+    onBlind: (Boolean) -> Unit,
+    canStart: Boolean,
+    onStart: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val state by Repo.state.collectAsStateWithLifecycle()
+    val connected = rememberConnectedOutputNames()
+    val presets = remember(connected, state.presets) { BuiltIns.availableFor(connected) + state.presets }
+    /** The saved version of a preset that's been edited sits beside the edited one, so it says which it is. */
+    fun label(preset: Preset) = if (preset.id == current.id) appText(Res.string.ui_saved, preset.name) else preset.name
+    fun nameOf(id: String?) = when (id) {
+        null -> appText(Res.string.ui_choose_below)
+        CURRENT -> appText(Res.string.ui_my_current_sound)
+        else -> presets.firstOrNull { it.id == id }?.let(::label) ?: appText(Res.string.ui_choose_below)
+    }
+    // Comparing something with itself wouldn't tell anyone anything, so neither slot offers the other's sound.
+    val otherId = if (choosingFirst) secondId else firstId
+
+    Text(
+        stringResource(Res.string.ui_switch_between_them_while_your_music_pla),
+        style = MaterialTheme.typography.bodyLarge,
+        color = Palette.TextDim,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Slot("A", nameOf(firstId), choosingFirst, Modifier.weight(1f)) { onChooseSlot(true) }
+        Slot("B", nameOf(secondId), !choosingFirst, Modifier.weight(1f)) { onChooseSlot(false) }
+    }
+    SettingsSection(stringResource(if (choosingFirst) Res.string.ui_choose_a else Res.string.ui_choose_b)) {
+        @Composable
+        fun Option(id: String, name: String) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 32.dp)
+                    .selectable(
+                        selected = (if (choosingFirst) firstId else secondId) == id,
+                        role = Role.RadioButton,
+                        onClick = { onPick(id) },
+                    )
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = (if (choosingFirst) firstId else secondId) == id, onClick = null, modifier = Modifier.padding(8.dp))
+                Text(name, style = MaterialTheme.typography.bodyLarge, color = Palette.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (otherId != CURRENT) Option(CURRENT, stringResource(Res.string.ui_my_current_sound_2, current.name))
+        presets.filter { it.id != otherId && (otherId != CURRENT || it != current) }.forEachIndexed { index, preset ->
+            if (index > 0 || otherId != CURRENT) RowDivider()
+            Option(preset.id, label(preset))
+        }
+    }
+    SettingsSection(stringResource(Res.string.ui_options)) {
+        SwitchSetting(stringResource(Res.string.ui_blind_comparison), Help.compareBlind, blind, onChange = onBlind)
+    }
+    Button(enabled = canStart, onClick = onStart, modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp)) { Text(stringResource(Res.string.ui_start_comparing)) }
+    TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 28.dp)) { Text(stringResource(Res.string.ui_cancel)) }
+}
+
+@Composable
+private fun Slot(label: String, name: String, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier
+            .clip(PanelShape)
+            .background(if (active) Palette.SurfaceHigh else Palette.Surface)
+            // The slot being chosen for is outlined too, so it isn't told apart by tone alone.
+            .border(1.dp, if (active) Palette.Lit else Palette.Line, PanelShape)
+            .selectable(selected = active, role = Role.Tab, onClick = onClick)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.titleMedium, color = if (active) Palette.Lit else Palette.TextDim)
+        Text(name, style = MaterialTheme.typography.bodyMedium, color = Palette.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun Listen(
+    comparison: AbComparison,
+    playing: Int,
+    silent: Boolean,
+    onPlay: (Int) -> Unit,
+    onPrefer: (Int) -> Unit,
+    onCancel: () -> Unit,
+) {
+    Text(
+        if (comparison.blind) stringResource(Res.string.ui_which_do_you_prefer) else stringResource(Res.string.ui_compare),
+        style = MaterialTheme.typography.headlineSmall,
+        color = Palette.Text,
+    )
+    Text(
+        if (comparison.blind) {
+            stringResource(Res.string.ui_the_buttons_are_in_a_random)
+        } else {
+            stringResource(Res.string.ui_switch_back_and_forth_ideally_on)
+        },
+        style = MaterialTheme.typography.bodyLarge,
+        color = Palette.TextDim,
+    )
+    if (silent) {
+        Text(stringResource(Res.string.ui_eigentone_is_off_so_both_will_sound_the), style = MaterialTheme.typography.bodyMedium, color = Palette.Danger)
+    } else {
+        NothingPlayingHint()
+    }
+    val musicActive = rememberMusicActive()
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        for (button in 0..1) {
+            SideCard(comparison.label(button), playing == button, musicActive, Modifier.weight(1f)) { onPlay(button) }
+        }
+    }
+    // One answer, for the sound that's playing, as in the other listening tools.
+    val name = comparison.nameFor(playing)
+    Button(onClick = { onPrefer(playing) }, modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp)) {
+        Text(
+            if (name != null) stringResource(Res.string.ui_use, comparison.label(playing), name) else stringResource(Res.string.ui_i_prefer, comparison.label(playing)),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+    TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 28.dp)) { Text(stringResource(Res.string.ui_keep_what_i_had)) }
+}
+
+@Composable
+private fun Reveal(chosen: String, other: String, wasCurrent: Boolean, onUse: () -> Unit, onCancel: () -> Unit) {
+    Text(stringResource(Res.string.ui_you_preferred, chosen), style = MaterialTheme.typography.headlineSmall, color = Palette.Text)
+    Text(
+        stringResource(Res.string.ui_the_other_one_was_a_single, other),
+        style = MaterialTheme.typography.bodyLarge,
+        color = Palette.TextDim,
+    )
+    if (wasCurrent) {
+        Button(onClick = onCancel, modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp)) { Text(stringResource(Res.string.ui_done)) }
+    } else {
+        Button(onClick = onUse, modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp)) { Text(stringResource(Res.string.ui_use_2, chosen), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 28.dp)) { Text(stringResource(Res.string.ui_keep_what_i_had)) }
+    }
+}
