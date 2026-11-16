@@ -15,7 +15,7 @@ jobs:
       matrix:
         arch: [x64, ARM64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Configure
         run: cmake -S . -B build -A ${{ matrix.arch }}  # the newest Visual Studio on the runner
       - name: Build
@@ -23,7 +23,7 @@ jobs:
       - name: Test the plug-in outside the audio engine
         if: matrix.arch == 'x64'
         run: ctest --test-dir build -C Release --output-on-failure
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: engine-${{ matrix.arch }}
           path: build/bin/*.*
@@ -35,12 +35,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           name: engine-x64
           path: build/bin
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -65,7 +65,7 @@ jobs:
       - name: Build the installer
         shell: pwsh
         run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DVersion=${{ steps.version.outputs.version }} installer\eigentone.iss'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: installer
           path: build/installer/*.exe
