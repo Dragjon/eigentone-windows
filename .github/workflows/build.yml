@@ -2,9 +2,12 @@ name: Build
 
 on:
   push:
+    branches: ["**"]
+    tags: ["v*"]
   pull_request:
 
 jobs:
+  # The plug-in, service, agent and setup tool, for both kinds of Windows PC.
   engine:
     runs-on: windows-latest
     strategy:
@@ -24,3 +27,53 @@ jobs:
         with:
           name: engine-${{ matrix.arch }}
           path: build/bin/*.*
+
+  # The app on top of the x64 engine, every test, and the installer. A version tag also publishes it.
+  installer:
+    needs: engine
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: engine-x64
+          path: build/bin
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Test the app
+        run: ./gradlew.bat :app:test --console=plain
+      - name: Build the app
+        run: ./gradlew.bat :app:createDistributable --console=plain
+      - name: Check the agent shipped with the app
+        shell: pwsh
+        run: |
+          if (-not (Test-Path app/build/compose/binaries/main/app/Eigentone/app/resources/eigentone-agent.exe)) {
+            throw "eigentone-agent.exe is missing from the app"
+          }
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $v = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "0.1.0" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+      - name: Build the installer
+        shell: pwsh
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DVersion=${{ steps.version.outputs.version }} installer\eigentone.iss'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: build/installer/*.exe
+      - name: Publish the pre-release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          name: Eigentone ${{ steps.version.outputs.version }}
+          body_path: docs/release-notes/${{ steps.version.outputs.version }}.md
+          files: build/installer/*.exe
