@@ -8,12 +8,13 @@ jobs:
   engine:
     runs-on: windows-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x64, ARM64]
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }}
+        run: cmake -S . -B build -A ${{ matrix.arch }}  # the newest Visual Studio on the runner
       - name: Build
         run: cmake --build build --config Release
       - name: Test the plug-in outside the audio engine
