@@ -6,6 +6,9 @@
 #include <audioenginebaseapo.h>
 #include <audiomediatype.h>
 
+#include <vector>
+
+#include "eigentone/dsp/engine.h"
 #include "eigentone/shared.h"
 
 namespace eigentone {
@@ -80,6 +83,10 @@ private:
     HRESULT checkFormat(IAudioMediaType* opposite, IAudioMediaType* requested, IAudioMediaType** supported);
     void claimSlot();
     void releaseSlot();
+    void startWorker();
+    void stopWorker();
+    static DWORD WINAPI workerMain(void* self);
+    void pollSettings();
 
     Inner inner_;
     IUnknown* outer_;
@@ -93,7 +100,13 @@ private:
 
     SharedLink link_;
     EndpointSlot* slot_ = nullptr;
-    float gain_ = 1.0f;  // the level actually applied, eased toward the requested one
+
+    // The sound engine. A worker thread watches for new settings and builds them off the audio thread.
+    dsp::Engine engine_;
+    HANDLE worker_ = nullptr;
+    HANDLE stop_ = nullptr;
+    LONG64 seenSeq_ = -1;
+    std::vector<float> silence_;  // zeros, as large as the biggest buffer Windows said it would send
 };
 
 /// Counts live objects and server locks, for DllCanUnloadNow.

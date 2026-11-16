@@ -22,11 +22,7 @@ namespace {
 // {1da5d803-d492-4edd-8c23-e0c0ffee7f0e},4: the output's own GUID, the same one its registry key is named after.
 constexpr PROPERTYKEY kEndpointGuid = {{0x1da5d803, 0xd492, 0x4edd, {0x8c, 0x23, 0xe0, 0xc0, 0xff, 0xee, 0x7f, 0x0e}}, 4};
 
-float dbToGain(float db) {
-    if (!(db > -96.0f)) return 0.0f;    // also catches NaN
-    if (db > 24.0f) db = 24.0f;         // a corrupted setting must never be able to blast the output
-    return std::pow(10.0f, db / 20.0f);
-}
+constexpr DWORD kPollMs = 15;  // how often new settings are looked for: quick enough to feel instant
 
 bool isFloat32(const UNCOMPRESSEDAUDIOFORMAT& f) {
     return f.guidFormatType == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT && f.dwBytesPerSampleContainer == 4 &&
@@ -50,8 +46,7 @@ SharedLink::SharedLink() {
     if (!block_) return;
     if (!existed) {
         block_->version = kVersion;
-        block_->enabled = 1;
-        block_->gainDb = 0.0f;
+        writeParams(block_, dsp::neutralParams());
         MemoryBarrier();
         block_->magic = kMagic;  // last, so a reader never sees a half-made block
     }
@@ -71,6 +66,7 @@ EigentoneApo::EigentoneApo(IUnknown* outer) : outer_(outer ? outer : &inner_) {
 }
 
 EigentoneApo::~EigentoneApo() {
+    stopWorker();
     releaseSlot();
     InterlockedDecrement(&gServerLocks);
 }
@@ -106,11 +102,17 @@ STDMETHODIMP_(ULONG) EigentoneApo::Inner::Release() {
 // ---------------------------------------------------------------------------------------------------------
 // IAudioProcessingObject
 
-STDMETHODIMP EigentoneApo::Reset() { return S_OK; }
+STDMETHODIMP EigentoneApo::Reset() {
+    if (locked_) engine_.reset();
+    return S_OK;
+}
 
 STDMETHODIMP EigentoneApo::GetLatency(HNSTIME* latency) {
     if (!latency) return E_POINTER;
-    *latency = 0;
+    // In 100 ns units. The engine works in blocks, which delays the sound by a fixed few milliseconds.
+    *latency = locked_ && sampleRate_ > 0
+                   ? static_cast<HNSTIME>(static_cast<double>(engine_.latencyFrames()) * 1e7 / sampleRate_)
+                   : 0;
     return S_OK;
 }
 
@@ -213,17 +215,72 @@ STDMETHODIMP EigentoneApo::LockForProcess(UINT32 numInputs, APO_CONNECTION_DESCR
     }
     channels_ = in.dwSamplesPerFrame;
     sampleRate_ = in.fFramesPerSecond;
-    gain_ = 1.0f;
+    try {
+        engine_.prepare(sampleRate_, channels_);
+        silence_.assign(static_cast<size_t>(inputs[0]->u32MaxFrameCount) * channels_, 0.0f);
+    } catch (...) {
+        return E_OUTOFMEMORY;
+    }
+    seenSeq_ = -1;
+    pollSettings();  // start with the current settings, not neutral ones
     claimSlot();
     locked_ = true;
+    startWorker();
     return S_OK;
 }
 
 STDMETHODIMP EigentoneApo::UnlockForProcess() {
     if (!locked_) return APOERR_ALREADY_UNLOCKED;
+    stopWorker();
     releaseSlot();
     locked_ = false;
     return S_OK;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// The settings worker
+
+void EigentoneApo::pollSettings() {
+    const SharedBlock* block = link_.block();
+    if (!block || block->magic != kMagic || block->seq == seenSeq_) return;
+    dsp::Params params;
+    const LONG64 seq = readParams(block, params);
+    if (seq < 0) return;               // mid-write; the next poll gets it
+    if (!engine_.update(params)) return;  // the audio thread hasn't caught up yet; the next poll retries
+    seenSeq_ = seq;
+    if (slot_) slot_->appliedSeq = seq;
+}
+
+DWORD WINAPI EigentoneApo::workerMain(void* raw) {
+    auto* self = static_cast<EigentoneApo*>(raw);
+    while (WaitForSingleObject(self->stop_, kPollMs) == WAIT_TIMEOUT) {
+        try {
+            self->pollSettings();
+        } catch (...) {
+            // Designing a filter can only fail by running out of memory. The sound carries on as it was.
+        }
+    }
+    return 0;
+}
+
+void EigentoneApo::startWorker() {
+    stop_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!stop_) return;
+    worker_ = CreateThread(nullptr, 0, workerMain, this, 0, nullptr);
+    if (worker_) SetThreadPriority(worker_, THREAD_PRIORITY_BELOW_NORMAL);
+}
+
+void EigentoneApo::stopWorker() {
+    if (worker_) {
+        SetEvent(stop_);
+        WaitForSingleObject(worker_, INFINITE);
+        CloseHandle(worker_);
+        worker_ = nullptr;
+    }
+    if (stop_) {
+        CloseHandle(stop_);
+        stop_ = nullptr;
+    }
 }
 
 void EigentoneApo::claimSlot() {
@@ -236,6 +293,8 @@ void EigentoneApo::claimSlot() {
             s.channels = channels_;
             s.heartbeat = 0;
             s.frames = 0;
+            s.latencyFrames = static_cast<uint32_t>(engine_.latencyFrames());
+            s.appliedSeq = seenSeq_;
             wcsncpy_s(s.endpoint, endpoint_, _TRUNCATE);
             s.active = 1;
             slot_ = &s;
@@ -266,34 +325,26 @@ STDMETHODIMP_(void) EigentoneApo::APOProcess(UINT32 numInputs, APO_CONNECTION_PR
     auto* dst = reinterpret_cast<float*>(out->pBuffer);
 
     out->u32ValidFrameCount = frames;
-    out->u32BufferFlags = in->u32BufferFlags;
-    if (in->u32BufferFlags == BUFFER_SILENT) {
-        if (dst != src) std::memset(dst, 0, samples * sizeof(float));
-        if (slot_) { slot_->peakIn = 0; slot_->peakOut = 0; slot_->heartbeat = slot_->heartbeat + 1; }
+    if (samples > silence_.size()) {
+        // More than the engine promised at lock time; pass it through rather than overrun anything.
+        if (dst != src) std::memcpy(dst, src, samples * sizeof(float));
+        out->u32BufferFlags = in->u32BufferFlags;
         return;
     }
-
-    float target = 1.0f;
-    const SharedBlock* block = link_.block();
-    if (block && block->magic == kMagic && block->enabled) target = dbToGain(block->gainDb);
-
-    // Ease from the last level to the new one across this buffer, so a change never clicks.
-    const float start = gain_;
-    const float step = frames ? (target - start) / static_cast<float>(frames) : 0.0f;
-    float peakIn = 0, peakOut = 0;
-    float g = start;
-    for (UINT32 f = 0; f < frames; ++f) {
-        g += step;
-        for (UINT32 c = 0; c < channels_; ++c) {
-            const UINT32 i = f * channels_ + c;
-            const float x = src[i];
-            const float y = x * g;
-            dst[i] = y;
-            peakIn = std::fmax(peakIn, std::fabs(x));
-            peakOut = std::fmax(peakOut, std::fabs(y));
-        }
+    // A silent buffer's contents aren't promised to be zero, and it belongs to the stage before, so
+    // silence comes from a buffer of our own. It still goes through the engine, so delayed sound and
+    // reverb tails play out.
+    float peakIn = 0;
+    if (in->u32BufferFlags == BUFFER_SILENT) {
+        src = silence_.data();
+    } else {
+        for (UINT32 i = 0; i < samples; ++i) peakIn = std::fmax(peakIn, std::fabs(src[i]));
     }
-    gain_ = target;
+    engine_.process(src, dst, frames);
+    float peakOut = 0;
+    for (UINT32 i = 0; i < samples; ++i) peakOut = std::fmax(peakOut, std::fabs(dst[i]));
+    // The engine keeps playing its delayed sound and reverb tail, so the output is never "silent" here.
+    out->u32BufferFlags = BUFFER_VALID;
 
     if (slot_) {
         slot_->peakIn = peakIn;

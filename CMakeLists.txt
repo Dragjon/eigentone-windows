@@ -10,4 +10,5 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 add_compile_definitions(UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 add_compile_options(/W4 /permissive- /utf-8)
 
+enable_testing()
 add_subdirectory(engine)

@@ -16,8 +16,9 @@
 namespace {
 
 int failures = 0;
-void check(bool ok, const char* what) {
-    std::printf("%s  %s\n", ok ? "pass" : "FAIL", what);
+void check(bool ok, const char* what, double value = -1) {
+    if (value >= 0) std::printf("%s  %s  (%.4g)\n", ok ? "pass" : "FAIL", what, value);
+    else std::printf("%s  %s\n", ok ? "pass" : "FAIL", what);
     if (!ok) ++failures;
 }
 
@@ -108,36 +109,51 @@ int wmain(int argc, wchar_t** argv) {
     UINT32 count = 0;
     check(SUCCEEDED(apo->GetInputChannelCount(&count)) && count == 2, "reports 2 channels");
 
+    HNSTIME latency = 0;
+    const bool gotLatency = SUCCEEDED(apo->GetLatency(&latency));
+    check(gotLatency && latency > 0 && latency < 100000, "reports its delay, under 10 ms", latency / 10000.0);
+    const size_t delay = static_cast<size_t>(std::llround(latency * 48000.0 / 1e7));
+
+    // Ten buffers of a 1 kHz tone, separate buffers and then in place. Without the shared block (an ordinary
+    // user can't create it), the engine runs neutral, so the output is the input, delayed.
     APO_CONNECTION_PROPERTY inP{reinterpret_cast<UINT_PTR>(in.data()), frames, BUFFER_VALID, APO_CONNECTION_PROPERTY_SIGNATURE};
     APO_CONNECTION_PROPERTY outP{reinterpret_cast<UINT_PTR>(out.data()), 0, BUFFER_INVALID, APO_CONNECTION_PROPERTY_SIGNATURE};
+    APO_CONNECTION_PROPERTY sameP{reinterpret_cast<UINT_PTR>(in.data()), 0, BUFFER_INVALID, APO_CONNECTION_PROPERTY_SIGNATURE};
     APO_CONNECTION_PROPERTY* inPs[] = {&inP};
     APO_CONNECTION_PROPERTY* outPs[] = {&outP};
-    double maxDiff = 0;
-    for (int b = 0; b < 10; ++b) {
-        for (UINT32 i = 0; i < frames; ++i) {
-            const float s = static_cast<float>(std::sin(2 * 3.14159265358979 * 1000 * (b * frames + i) / 48000.0));
-            in[i * 2] = s;
-            in[i * 2 + 1] = -s;
-        }
-        rt->APOProcess(1, inPs, 1, outPs);
-        for (UINT32 i = 0; i < frames * ch; ++i) maxDiff = std::fmax(maxDiff, std::fabs(out[i] - in[i]));
-    }
-    // Without the shared block (an ordinary user can't create it), the plug-in passes sound through at 0 dB.
-    check(outP.u32ValidFrameCount == frames && outP.u32BufferFlags == BUFFER_VALID, "marks the output valid");
-    check(maxDiff < 1e-6, "passes sound through unchanged at 0 dB");
-
-    inP.u32BufferFlags = BUFFER_SILENT;
-    out.assign(out.size(), 1.0f);
-    rt->APOProcess(1, inPs, 1, outPs);
-    check(outP.u32BufferFlags == BUFFER_SILENT && out[0] == 0.0f, "silence stays silent");
-
-    // In place, as some chains run it.
-    inP.u32BufferFlags = BUFFER_VALID;
-    APO_CONNECTION_PROPERTY sameP{reinterpret_cast<UINT_PTR>(in.data()), 0, BUFFER_INVALID, APO_CONNECTION_PROPERTY_SIGNATURE};
     APO_CONNECTION_PROPERTY* samePs[] = {&sameP};
-    const float before = in[10];
-    rt->APOProcess(1, inPs, 1, samePs);
-    check(in[10] == before, "works in place");
+    auto tone = [](size_t n) { return static_cast<float>(std::sin(2 * 3.14159265358979 * 1000 * static_cast<double>(n) / 48000.0)); };
+    double maxDiff = 0;
+    bool valid = true;
+    for (int b = 0; b < 20; ++b) {
+        for (UINT32 i = 0; i < frames; ++i) {
+            in[i * 2] = tone(b * frames + i);
+            in[i * 2 + 1] = -tone(b * frames + i);
+        }
+        const bool inPlace = b >= 10;
+        rt->APOProcess(1, inPs, 1, inPlace ? samePs : outPs);
+        const std::vector<float>& result = inPlace ? in : out;
+        valid &= (inPlace ? sameP : outP).u32ValidFrameCount == frames && (inPlace ? sameP : outP).u32BufferFlags == BUFFER_VALID;
+        for (UINT32 i = 0; i < frames; ++i) {
+            const size_t n = b * frames + i;
+            const float want = n >= delay ? tone(n - delay) : 0.0f;
+            maxDiff = std::fmax(maxDiff, std::fabs(result[i * 2] - want));
+            maxDiff = std::fmax(maxDiff, std::fabs(result[i * 2 + 1] + want));
+        }
+    }
+    check(valid, "marks the output valid");
+    check(maxDiff < 1e-5, "passes sound through unchanged, only delayed, in separate buffers and in place", maxDiff);
+
+    // A silent input plays out what's still inside, then silence. Its buffer isn't touched.
+    inP.u32BufferFlags = BUFFER_SILENT;
+    std::fill(in.begin(), in.end(), 0.5f);  // a "silent" buffer's contents aren't promised to be zero
+    double tail = 0;
+    for (int b = 0; b < 3; ++b) {
+        rt->APOProcess(1, inPs, 1, outPs);
+        if (b == 2) for (float v : out) tail = std::fmax(tail, std::fabs(v));
+    }
+    check(tail == 0.0, "silence comes out silent once the delay has played out");
+    check(in[0] == 0.5f, "a silent input's buffer is left alone");
 
     check(SUCCEEDED(cfg->UnlockForProcess()), "unlocks");
     check(cfg->UnlockForProcess() == APOERR_ALREADY_UNLOCKED, "a second unlock is refused");

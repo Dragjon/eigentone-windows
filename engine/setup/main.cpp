@@ -6,7 +6,9 @@
 //   eigentone-setup unhook  [endpoint-guid]  restore one output (or all) exactly as it was
 //   eigentone-setup uninstall               unhook every output, unregister, remove the files
 //   eigentone-setup restart-audio           restart Windows Audio so hooks take effect
-//   eigentone-setup gain <dB> | on | off    change the live level, to hear that the chain works
+//   eigentone-setup set ...                 change the live sound, to hear each stage work:
+//       on | off | gain <dB> | tone <bass dB> <treble dB> | flat | compressor on|off
+//       limiter on|off | surround <0-1> | reverb room|hall|plate|off
 //
 // Every output Eigentone hooks has its original setting saved first under HKLM\SOFTWARE\Eigentone\Hooks,
 // and unhook writes exactly that back, or removes the value if it wasn't there.
@@ -19,11 +21,13 @@
 #include <shlobj.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cwctype>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "eigentone/dsp/design.h"
 #include "eigentone/shared.h"
 
 using namespace eigentone;
@@ -434,7 +438,12 @@ int status() {
     LONG64 before[kMaxSlots];
     for (UINT i = 0; i < kMaxSlots; ++i) before[i] = b->slots[i].heartbeat;
     Sleep(300);
-    wprintf(L"\nEngine: %ls, level %+.1f dB\n", b->enabled ? L"on" : L"off (passing sound through)", b->gainDb);
+    dsp::Params p{};
+    readParams(b, p);
+    wprintf(L"\nEngine: %ls, level %+.1f dB, EQ %u bands, compressor %ls, surround %.2f, reverb %ls, limiter %ls\n",
+            p.enabled ? L"on" : L"off (passing sound through)", p.inputGainDb[0], p.eq.bandCount,
+            p.mbc.enabled ? L"on" : L"off", p.virtualizer.enabled ? p.virtualizer.strength : 0.0f,
+            p.reverb.enabled ? L"on" : L"off", p.limiter.enabled ? L"on" : L"off");
     for (UINT i = 0; i < kMaxSlots; ++i) {
         const EndpointSlot& s = b->slots[i];
         if (!s.owner) continue;
@@ -497,13 +506,72 @@ int uninstall() {
     return rc;
 }
 
-int setLevel(const wchar_t* arg) {
+/// A test curve on Android's 128-band layout: a bass shelf at 120 Hz and a treble shelf at 6 kHz.
+void toneCurve(dsp::EqParams& eq, double bassDb, double trebleDb, double rate) {
+    const dsp::Biquad bass = dsp::Biquad::lowShelf(120, bassDb, 0.7071, rate);
+    const dsp::Biquad treble = dsp::Biquad::highShelf(6000, trebleDb, 0.7071, rate);
+    eq.bandCount = 128;
+    for (uint32_t i = 0; i < 128; ++i) eq.cutoffHz[i] = static_cast<float>(20.0 * std::pow(1000.0, (i + 1) / 128.0));
+    for (uint32_t i = 0; i < 128; ++i) {
+        const double lo = i == 0 ? eq.cutoffHz[0] * 0.5 : eq.cutoffHz[i - 1];
+        const double centre = std::sqrt(lo * eq.cutoffHz[i]);
+        const double g = dsp::biquadGainDb(bass, centre, rate) + dsp::biquadGainDb(treble, centre, rate);
+        eq.gainDb[0][i] = eq.gainDb[1][i] = static_cast<float>(g);
+    }
+}
+
+bool isOn(const wchar_t* v) { return lstrcmpiW(v, L"on") == 0; }
+
+int set(int argc, wchar_t** argv) {
     SharedBlock* b = openShared(true);
-    if (!b) return fail(L"the engine isn't running");
-    if (lstrcmpiW(arg, L"on") == 0) b->enabled = 1;
-    else if (lstrcmpiW(arg, L"off") == 0) b->enabled = 0;
-    else b->gainDb = static_cast<float>(_wtof(arg));
-    wprintf(L"Engine %ls, level %+.1f dB\n", b->enabled ? L"on" : L"off", b->gainDb);
+    if (!b) return fail(L"the engine isn't running; play something on a hooked output first");
+    if (argc < 3) return 2;
+    dsp::Params p{};
+    while (readParams(b, p) < 0) Sleep(1);
+    const std::wstring what = lower(argv[2]);
+    const wchar_t* v = argc > 3 ? argv[3] : L"";
+    if (what == L"on" || what == L"off") {
+        p.enabled = what == L"on";
+    } else if (what == L"gain") {
+        p.inputGainDb[0] = p.inputGainDb[1] = static_cast<float>(_wtof(v));
+    } else if (what == L"tone") {
+        toneCurve(p.eq, _wtof(v), argc > 4 ? _wtof(argv[4]) : 0.0, 48000);
+    } else if (what == L"flat") {
+        p.eq.bandCount = 0;
+    } else if (what == L"compressor") {
+        // A gentle three-band levelling style, as night mode might use.
+        p.mbc.enabled = isOn(v);
+        p.mbc.bandCount = 3;
+        p.mbc.bands[0] = {1, 200, 20, 300, 3, -30, 6, -70, 1, 0, 6};
+        p.mbc.bands[1] = {1, 2500, 10, 200, 3, -30, 6, -70, 1, 0, 6};
+        p.mbc.bands[2] = {1, 24000, 5, 150, 3, -30, 6, -70, 1, 0, 6};
+    } else if (what == L"limiter") {
+        p.limiter = {isOn(v) ? 1u : 0u, 1.0f, 60.0f, 10.0f, -1.0f, 0.0f};
+    } else if (what == L"surround") {
+        p.virtualizer = {_wtof(v) > 0 ? 1u : 0u, static_cast<float>(_wtof(v))};
+    } else if (what == L"reverb") {
+        // Android's presets, in EnvironmentalReverb's units.
+        const std::wstring kind = lower(v);
+        if (kind == L"room") p.reverb = {1, -1000, -600, 1100, 0.83f, -400, 5, 500, 10, 1, 1};
+        else if (kind == L"hall") p.reverb = {1, -1000, -600, 1800, 0.7f, -1300, 15, -800, 30, 1, 1};
+        else if (kind == L"plate") p.reverb = {1, -1000, -200, 1300, 0.9f, 0, 2, 0, 10, 0.75f, 1};
+        else p.reverb.enabled = 0;
+    } else {
+        return 2;
+    }
+    writeParams(b, p);
+    // Wait for every running plug-in to report the change, so the result is known when this returns.
+    const LONG64 want = b->seq;
+    for (int i = 0; i < 100; ++i) {
+        bool all = true;
+        for (const EndpointSlot& s : b->slots) all &= !s.owner || s.appliedSeq >= want;
+        if (all) {
+            wprintf(L"Applied.\n");
+            return 0;
+        }
+        Sleep(10);
+    }
+    wprintf(L"Written, but no plug-in has picked it up yet (is anything playing?).\n");
     return 0;
 }
 
@@ -520,7 +588,7 @@ int wmain(int argc, wchar_t** argv) {
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     const std::wstring cmd = lower(argv[1]);
     if (cmd == L"status") return status();
-    if (cmd == L"gain") return argc > 2 ? setLevel(argv[2]) : usage();
+    if (cmd == L"set") return set(argc, argv) == 2 ? usage() : 0;
 
     if (!isAdmin()) return fail(L"run this as administrator");
     enablePrivilege(SE_BACKUP_NAME);
